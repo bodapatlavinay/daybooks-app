@@ -1,83 +1,89 @@
-    import { useState } from 'react';
-    import { formStyles } from './styles';
+import { useState } from 'react';
+import { formStyles, C } from './styles';
 
-    export default function ShopSetup({ user, message, messageType, submitting, onCreateShop, onLogout }) {
-    const [shopName, setShopName] = useState('');
+export default function ShopSetup({ user, message, messageType, submitting, onCreateShop, onLogout }) {
+  const [shopName, setShopName] = useState('');
 
-    function handleSubmit(e) {
-        e.preventDefault();
-        onCreateShop(shopName);
-    }
+  function handleSubmit(e) {
+    e.preventDefault();
+    onCreateShop(shopName);
+  }
 
-    return (
-        <div style={formStyles.page}>
-        <form onSubmit={handleSubmit} style={formStyles.card}>
-
-            <div style={{ textAlign: 'center' }}>
-            <div style={s.logo}>DayBooks</div>
-            <h2 style={s.heading}>Create Your Shop</h2>
-            <p style={s.welcome}>Welcome, {user.email}</p>
-            </div>
-
-            <p style={s.hint}>
-            Enter your business name. We'll automatically add common tire &amp; auto
-            service types so you can start recording income straight away.
-            </p>
-
-            <div style={s.field}>
-            <label htmlFor="shop-name-setup" style={s.label}>Business Name</label>
-            <input
-                id="shop-name-setup"
-                name="shop-name"
-                type="text"
-                placeholder="e.g. Mike's Tire & Auto"
-                value={shopName}
-                onChange={(e) => setShopName(e.target.value)}
-                style={formStyles.input}
-                autoComplete="organization"
-                autoFocus
-                required
-            />
-            </div>
-
-            <button
-            type="submit"
-            style={{ ...formStyles.button, opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }}
-            disabled={submitting}
-            >
-            {submitting ? 'Setting up shop...' : 'Create Shop'}
-            </button>
-
-            <button
-            type="button"
-            onClick={onLogout}
-            style={formStyles.secondaryButton}
-            disabled={submitting}
-            >
-            Logout
-            </button>
-
-            {message && (
-            <div style={{
-                ...s.message,
-                background: messageType === 'error' ? '#fff0f0' : '#f0faf4',
-                color:      messageType === 'error' ? '#c80815' : '#15803d',
-                border:     `1px solid ${messageType === 'error' ? '#fccaca' : '#bbf0d4'}`,
-            }}>
-                {messageType === 'error' ? '⚠️ ' : '✓ '}{message}
-            </div>
-            )}
-        </form>
+  return (
+    <div style={formStyles.page}>
+      <form onSubmit={handleSubmit} style={s.card}>
+        <div style={s.logoRow}>
+          <div style={s.logo}><span style={s.logoD}>D</span></div>
+          <span style={s.logoLabel}>DayBooks</span>
         </div>
-    );
-    }
 
-    const s = {
-    logo:    { fontSize: '28px', fontWeight: '900', color: '#c80815', letterSpacing: '-1px', marginBottom: '8px' },
-    heading: { margin: '0 0 4px', fontSize: '20px', fontWeight: '800', color: '#111' },
-    welcome: { margin: 0, fontSize: '13px', color: '#888' },
-    field:   { display: 'flex', flexDirection: 'column', gap: '5px' },
-    label:   { fontSize: '12px', fontWeight: '700', color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' },
-    hint:    { margin: 0, fontSize: '13px', color: '#666', lineHeight: '1.6', background: '#f9f9f9', border: '1px solid #eee', borderRadius: '10px', padding: '12px 14px' },
-    message: { padding: '10px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: '600' },
-    };
+        <div>
+          <h2 style={s.title}>Set up your shop</h2>
+          <p style={s.sub}>Welcome, {user.email}</p>
+        </div>
+
+        <div style={s.hint}>
+          <span style={s.hintIcon}>⚡</span>
+          <span style={s.hintText}>
+            We'll automatically add Tire Sale, Balancing, Oil Change, and other common services so you can start recording income right away.
+          </span>
+        </div>
+
+        <div style={s.field}>
+          <label htmlFor="shop-name-setup" style={s.label}>Business name</label>
+          <input
+            id="shop-name-setup" name="shop-name" type="text"
+            placeholder="e.g. Mike's Tire & Auto"
+            value={shopName} onChange={(e) => setShopName(e.target.value)}
+            style={s.input} autoComplete="organization" autoFocus required
+          />
+        </div>
+
+        <button type="submit" style={{
+          ...s.submitBtn,
+          opacity: submitting ? 0.7 : 1,
+          cursor: submitting ? 'not-allowed' : 'pointer',
+        }} disabled={submitting}>
+          {submitting ? 'Setting up...' : 'Create my shop →'}
+        </button>
+
+        <button type="button" onClick={onLogout} style={s.logoutBtn} disabled={submitting}>
+          Sign out
+        </button>
+
+        {message && (
+          <div style={{
+            ...s.msg,
+            background: messageType === 'error' ? C.redLight : C.greenBg,
+            color:      messageType === 'error' ? C.red      : C.green,
+            border:     `1px solid ${messageType === 'error' ? C.redMid : C.greenBorder}`,
+          }}>
+            {messageType === 'error' ? '⚠ ' : '✓ '}{message}
+          </div>
+        )}
+      </form>
+    </div>
+  );
+}
+
+const s = {
+  card: { width: '100%', maxWidth: '420px', background: C.white, padding: '36px', borderRadius: '20px', boxShadow: '0 32px 80px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: '18px' },
+  logoRow: { display: 'flex', alignItems: 'center', gap: '10px' },
+  logo: { width: '36px', height: '36px', background: C.red, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  logoD: { fontSize: '20px', fontWeight: '900', color: C.white, lineHeight: 1 },
+  logoLabel: { fontSize: '18px', fontWeight: '800', color: C.black, letterSpacing: '-0.3px' },
+  title: { fontSize: '22px', fontWeight: '800', color: C.black, margin: '0 0 4px', letterSpacing: '-0.3px' },
+  sub: { fontSize: '13px', color: C.muted, margin: 0 },
+  hint: { display: 'flex', gap: '10px', background: '#f9f5ff', border: '1px solid #e4d4ff', borderRadius: '10px', padding: '12px 14px' },
+  hintIcon: { fontSize: '16px', flexShrink: 0, marginTop: '1px' },
+  hintText: { fontSize: '13px', color: '#5b3d9e', lineHeight: '1.5' },
+  field: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  label: { fontSize: '12px', fontWeight: '600', color: C.dark, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  input: { padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${C.border}`, fontSize: '14px', background: C.surface, outline: 'none', color: C.black, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' },
+  submitBtn: { padding: '13px', borderRadius: '10px', border: 'none', background: C.red, color: C.white, fontWeight: '700', fontSize: '15px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' },
+  logoutBtn: { padding: '10px', borderRadius: '10px', border: `1.5px solid ${C.border}`, background: 'transparent', color: C.muted, fontWeight: '500', fontSize: '13px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer', textAlign: 'center' },
+  msg: { padding: '10px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: '600' },
+};
+
+// Export C so it's available
+export { C };

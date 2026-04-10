@@ -1,82 +1,44 @@
+    import { C } from './styles';
+
     export default function SummaryCard({ totalIncome, totalExpense, profit }) {
-    const profitPositive = profit >= 0;
-
+    const profitPos = profit >= 0;
     return (
-        <div style={styles.grid}>
-        <div style={styles.metricCard}>
-            <div style={styles.label}>Income</div>
-            <div style={{ ...styles.value, color: '#15803d' }}>
-            ${totalIncome.toFixed(2)}
-            </div>
-        </div>
-
-        <div style={styles.metricCard}>
-            <div style={styles.label}>Expenses</div>
-            <div style={{ ...styles.value, color: '#c80815' }}>
-            ${totalExpense.toFixed(2)}
-            </div>
-        </div>
-
-        <div
-            style={{
-            ...styles.metricCard,
-            ...styles.profitCard,
-            background: profitPositive ? '#c80815' : '#111',
-            boxShadow: profitPositive
-                ? '0 10px 24px rgba(200,8,21,0.2)'
-                : '0 10px 24px rgba(0,0,0,0.15)',
-            }}
-        >
-            <div style={{ ...styles.label, color: 'rgba(255,255,255,0.7)' }}>
-            Net Profit
-            </div>
-            <div style={{ ...styles.value, color: '#fff' }}>
-            {profitPositive ? '+' : ''}${profit.toFixed(2)}
-            </div>
-            {!profitPositive && (
-            <div style={styles.lossNote}>Expenses exceed income for this period</div>
-            )}
+        <div style={s.wrap}>
+        <Row label="Total Income" value={`$${totalIncome.toFixed(2)}`} valueColor={C.green} />
+        <Row label="Total Expenses" value={`$${totalExpense.toFixed(2)}`} valueColor={C.red} />
+        <div style={s.divider} />
+        <div style={s.profitRow}>
+            <span style={s.profitLabel}>Net Profit</span>
+            <span style={{ ...s.profitValue, color: profitPos ? C.green : C.red }}>
+            {profitPos ? '+' : ''}${profit.toFixed(2)}
+            </span>
         </div>
         </div>
     );
     }
 
-    const styles = {
-    grid: {
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '10px',
-        marginBottom: '4px',
+    function Row({ label, value, valueColor }) {
+    return (
+        <div style={s.row}>
+        <span style={s.label}>{label}</span>
+        <span style={{ ...s.value, color: valueColor }}>{value}</span>
+        </div>
+    );
+    }
+
+    const s = {
+    wrap: {
+        background: C.white, borderRadius: '12px',
+        border: `1px solid ${C.border}`,
+        padding: '20px',
+        display: 'flex', flexDirection: 'column', gap: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     },
-    metricCard: {
-        background: '#fff',
-        border: '1px solid #ededed',
-        borderRadius: '16px',
-        padding: '16px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-    },
-    profitCard: {
-        gridColumn: '1 / -1',
-        border: 'none',
-    },
-    label: {
-        fontSize: '11px',
-        fontWeight: '700',
-        color: '#999',
-        textTransform: 'uppercase',
-        letterSpacing: '0.8px',
-        marginBottom: '8px',
-    },
-    value: {
-        fontSize: '26px',
-        fontWeight: '900',
-        color: '#111',
-        letterSpacing: '-0.5px',
-        lineHeight: 1,
-    },
-    lossNote: {
-        marginTop: '6px',
-        fontSize: '12px',
-        color: 'rgba(255,255,255,0.7)',
-    },
+    row:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    label: { fontSize: '13px', color: C.mid, fontWeight: '500' },
+    value: { fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px' },
+    divider: { height: '1px', background: C.border },
+    profitRow:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    profitLabel: { fontSize: '13px', fontWeight: '700', color: C.dark },
+    profitValue: { fontSize: '20px', fontWeight: '900', letterSpacing: '-0.5px' },
     };
