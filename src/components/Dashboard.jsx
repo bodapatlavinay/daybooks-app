@@ -29,16 +29,18 @@
     onAddExpense, onEditExpense, onDeleteExpense,
     onAddPartner, onEditPartner, onDeletePartner,
     onAddService, onEditService, onDeleteService,
-    onSaveShop, onLogout,
+    onSaveShop, onLogout, onDeleteAccount,
     }) {
-    const [tab, setTab]                   = useState('dashboard');
+    const [tab, setTab]                     = useState('dashboard');
     const [confirmDelete, setConfirmDelete] = useState(null);
-    const [editingEntry, setEditingEntry]   = useState(null);
+    const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
+    const [deleteAccountInput, setDeleteAccountInput]     = useState('');
+    const [editingEntry, setEditingEntry]     = useState(null);
     const [editingExpense, setEditingExpense] = useState(null);
     const [editingPartner, setEditingPartner] = useState(null);
     const [editingService, setEditingService] = useState(null);
 
-    const equityTotal = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
+    const equityTotal       = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
     const showEquityWarning = partners.length > 0 && Math.abs(equityTotal - 100) > 0.01;
 
     function requestDelete(type, id, label) { setConfirmDelete({ type, id, label }); }
@@ -51,6 +53,21 @@
         if (type === 'expense') return onDeleteExpense(id);
         if (type === 'partner') return onDeletePartner(id);
         if (type === 'service') return onDeleteService(id);
+    }
+
+    // Delete account — requires typing "DELETE" to confirm
+    function openDeleteAccount() {
+        setDeleteAccountInput('');
+        setConfirmDeleteAccount(true);
+    }
+    function closeDeleteAccount() {
+        setConfirmDeleteAccount(false);
+        setDeleteAccountInput('');
+    }
+    async function doDeleteAccount() {
+        if (deleteAccountInput !== 'DELETE') return;
+        closeDeleteAccount();
+        await onDeleteAccount();
     }
 
     return (
@@ -76,30 +93,30 @@
             </div>
         )}
 
-        {/* ── DASHBOARD ── */}
+        {/* ── DASHBOARD ────────────────────────────────────────────── */}
         {tab === 'dashboard' && (
-            <div style={s.page}>
-            {/* Period row */}
-            <div style={s.periodRow}>
+            <div style={s.dashPage}>
+            {/* Period strip — 3 equal cards */}
+            <div style={s.periodStrip}>
                 {[
-                { label: 'Today',      d: periodTotals.today },
-                { label: 'This Week',  d: periodTotals.week  },
-                { label: 'This Month', d: periodTotals.month },
-                ].map(({ label, d: pd }) => (
+                { label: 'Today',      pd: periodTotals.today },
+                { label: 'This Week',  pd: periodTotals.week  },
+                { label: 'This Month', pd: periodTotals.month },
+                ].map(({ label, pd }) => (
                 <div key={label} style={s.periodCard}>
                     <div style={s.periodTop}>
                     <span style={s.periodLabel}>{label}</span>
                     <span style={{
-                        ...s.periodProfit,
-                        color: pd.profit >= 0 ? C.green : C.red,
-                        background: pd.profit >= 0 ? C.greenBg : C.redLight,
-                        border: `1px solid ${pd.profit >= 0 ? C.greenBorder : C.redMid}`,
+                        ...s.periodBadge,
+                        color:      pd.profit >= 0 ? C.greenText : C.red,
+                        background: pd.profit >= 0 ? C.greenBg   : C.redLight,
+                        border:     `1px solid ${pd.profit >= 0 ? C.greenBorder : C.redMid}`,
                     }}>
                         {pd.profit >= 0 ? '+' : ''}${pd.profit.toFixed(2)}
                     </span>
                     </div>
                     <div style={s.periodIncome}>${pd.income.toFixed(2)}</div>
-                    <div style={s.periodExpRow}>
+                    <div style={s.periodBottom}>
                     <span style={s.periodExpLabel}>Expenses</span>
                     <span style={s.periodExpVal}>${pd.expense.toFixed(2)}</span>
                     </div>
@@ -107,16 +124,23 @@
                 ))}
             </div>
 
-            {/* Main grid */}
+            {/* Two columns: left = summary, right = recent activity */}
             <div style={s.dashGrid}>
+                {/* Left — summary totals */}
                 <div style={s.dashLeft}>
-                <SummaryCard totalIncome={totals.totalIncome} totalExpense={totals.totalExpense} profit={totals.profit} />
+                <SummaryCard
+                    totalIncome={totals.totalIncome}
+                    totalExpense={totals.totalExpense}
+                    profit={totals.profit}
+                />
                 </div>
+
+                {/* Right — recent income + recent expenses stacked */}
                 <div style={s.dashRight}>
                 <TableSection title="Recent Income" count={entries.length} accentColor={C.green}>
                     {entries.length === 0
-                    ? <EmptyRow icon="↑" text="No income recorded yet" hint="Go to Income to add your first entry" />
-                    : entries.slice(0, 6).map(item => (
+                    ? <EmptyRow text="No income recorded yet" hint="Go to Income tab to add your first entry." />
+                    : entries.slice(0, 5).map(item => (
                         <EntryRow key={item.id} item={item} services={services}
                             isEditing={editingEntry === item.id}
                             onEdit={() => setEditingEntry(item.id)}
@@ -126,10 +150,11 @@
                             submitting={submitting} />
                         ))}
                 </TableSection>
+
                 <TableSection title="Recent Expenses" count={expenses.length} accentColor={C.red}>
                     {expenses.length === 0
-                    ? <EmptyRow icon="↓" text="No expenses logged yet" hint="Go to Expenses to log spending" />
-                    : expenses.slice(0, 6).map(item => (
+                    ? <EmptyRow text="No expenses logged yet" hint="Go to Expenses tab to log spending." />
+                    : expenses.slice(0, 5).map(item => (
                         <ExpenseRow key={item.id} item={item} partners={partners} currentUserEmail={user.email}
                             isEditing={editingExpense === item.id}
                             onEdit={() => setEditingExpense(item.id)}
@@ -144,20 +169,20 @@
             </div>
         )}
 
-        {/* ── INCOME ── */}
+        {/* ── INCOME ───────────────────────────────────────────────── */}
         {tab === 'entries' && (
-            <div style={s.twoColPage}>
-            <div style={s.formPanel}>
+            <div style={s.twoCol}>
+            <div style={s.leftCol}>
                 <Panel title="Record Income">
                 {services.length === 0
                     ? <EmptyCard icon="⚙️" text="No services yet" hint="Add services in Settings first." />
                     : <EntryForm onAddEntry={onAddEntry} services={services} submitting={submitting} />}
                 </Panel>
             </div>
-            <div style={s.listPanel}>
+            <div style={s.rightCol}>
                 <TableSection title="All Income" count={entries.length} accentColor={C.green}>
                 {entries.length === 0
-                    ? <EmptyRow icon="↑" text="No entries for this period" hint="Try a different filter or add income above." />
+                    ? <EmptyRow text="No entries for this period" hint="Try a different filter or add income." />
                     : entries.map(item => (
                         <EntryRow key={item.id} item={item} services={services}
                         isEditing={editingEntry === item.id}
@@ -172,18 +197,19 @@
             </div>
         )}
 
-        {/* ── EXPENSES ── */}
+        {/* ── EXPENSES ─────────────────────────────────────────────── */}
         {tab === 'expenses' && (
-            <div style={s.twoColPage}>
-            <div style={s.formPanel}>
+            <div style={s.twoCol}>
+            <div style={s.leftCol}>
                 <Panel title="Log Expense">
-                <ExpenseForm onAddExpense={onAddExpense} partners={partners} currentUserEmail={user.email} submitting={submitting} />
+                <ExpenseForm onAddExpense={onAddExpense} partners={partners}
+                    currentUserEmail={user.email} submitting={submitting} />
                 </Panel>
             </div>
-            <div style={s.listPanel}>
+            <div style={s.rightCol}>
                 <TableSection title="All Expenses" count={expenses.length} accentColor={C.red}>
                 {expenses.length === 0
-                    ? <EmptyRow icon="↓" text="No expenses for this period" hint="Try a different filter or log one above." />
+                    ? <EmptyRow text="No expenses for this period" hint="Try a different filter or log one." />
                     : expenses.map(item => (
                         <ExpenseRow key={item.id} item={item} partners={partners} currentUserEmail={user.email}
                         isEditing={editingExpense === item.id}
@@ -198,23 +224,23 @@
             </div>
         )}
 
-        {/* ── PARTNERS ── */}
+        {/* ── PARTNERS ─────────────────────────────────────────────── */}
         {tab === 'partners' && (
-            <div style={s.twoColPage}>
-            <div style={s.formPanel}>
+            <div style={s.twoCol}>
+            <div style={s.leftCol}>
                 <Panel title="Add Partner">
                 <PartnersForm onAddPartner={onAddPartner} submitting={submitting} />
                 </Panel>
                 {showEquityWarning && (
                 <div style={s.warningBanner}>
-                    ⚠ Equity totals {equityTotal.toFixed(0)}% — should be 100% for accurate settlement
+                    ⚠ Equity totals {equityTotal.toFixed(0)}% — should be exactly 100%
                 </div>
                 )}
             </div>
-            <div style={s.listPanel}>
+            <div style={s.rightCol}>
                 <TableSection title="Partners" count={partners.length} accentColor={C.dark}>
                 {partners.length === 0
-                    ? <EmptyRow icon="👤" text="No partners yet" hint="Add each owner with their equity %." />
+                    ? <EmptyRow text="No partners yet" hint="Add each owner with their equity %." />
                     : partners.map(p => (
                         <PartnerRow key={p.id} partner={p}
                         isEditing={editingPartner === p.id}
@@ -230,15 +256,15 @@
             </div>
         )}
 
-        {/* ── REPORTS ── */}
+        {/* ── REPORTS ──────────────────────────────────────────────── */}
         {tab === 'reports' && (
             <ReportsCard entries={entries} expenses={expenses} totals={totals} filter={filter} />
         )}
 
-        {/* ── SETTINGS ── */}
+        {/* ── SETTINGS ─────────────────────────────────────────────── */}
         {tab === 'settings' && (
-            <div style={s.twoColPage}>
-            <div style={s.formPanel}>
+            <div style={s.twoCol}>
+            <div style={s.leftCol}>
                 <Panel title="Shop Settings">
                 <SettingsForm shop={shop} onSaveShop={onSaveShop} submitting={submitting} />
                 </Panel>
@@ -257,7 +283,7 @@
                     ))}
                 </Panel>
             </div>
-            <div style={s.listPanel}>
+            <div style={s.rightCol}>
                 <Panel title="Account">
                 <div style={s.accountItem}>
                     <span style={s.accountLabel}>Email</span>
@@ -267,12 +293,36 @@
                     <span style={s.accountLabel}>Shop</span>
                     <span style={s.accountValue}>{shop.name}</span>
                 </div>
-                <div style={s.accountItem}>
+                {shop.category && (
+                    <div style={s.accountItem}>
                     <span style={s.accountLabel}>Type</span>
-                    <span style={s.accountValue}>{shop.category || '—'}</span>
-                </div>
-                <button onClick={onLogout} style={s.signoutBtn}>Sign out</button>
+                    <span style={s.accountValue}>{shop.category}</span>
+                    </div>
+                )}
+                <button onClick={onLogout} style={s.signoutBtn} disabled={submitting}>
+                    Sign out
+                </button>
                 </Panel>
+
+                {/* Danger zone */}
+                <div style={s.dangerPanel}>
+                <div style={s.dangerHeader}>
+                    <span style={s.dangerTitle}>Danger Zone</span>
+                </div>
+                <div style={s.dangerBody}>
+                    <div style={s.dangerRow}>
+                    <div>
+                        <div style={s.dangerItemTitle}>Delete account</div>
+                        <div style={s.dangerItemDesc}>
+                        Permanently deletes your shop, all income, expenses, partners, and services. This cannot be undone.
+                        </div>
+                    </div>
+                    <button onClick={openDeleteAccount} style={s.dangerBtn} disabled={submitting}>
+                        Delete account
+                    </button>
+                    </div>
+                </div>
+                </div>
             </div>
             </div>
         )}
@@ -289,21 +339,17 @@
             </div>
         )}
 
-        {/* Delete dialog */}
+        {/* Delete record dialog */}
         {confirmDelete && (
             <div style={s.overlay}>
             <div style={s.dialog}>
-                <div style={s.dialogHead}>
-                <div style={s.dialogIcon}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <div style={s.dialogIconWrap}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                    </svg>
+                </svg>
                 </div>
-                <div>
-                    <p style={s.dialogTitle}>Delete this record?</p>
-                    <p style={s.dialogSub}>"{confirmDelete.label}"</p>
-                </div>
-                </div>
+                <p style={s.dialogTitle}>Delete this record?</p>
+                <p style={s.dialogSub}>"{confirmDelete.label}"</p>
                 <p style={s.dialogNote}>This cannot be undone.</p>
                 <div style={s.dialogBtns}>
                 <button style={s.dialogCancel} onClick={cancelDelete}>Cancel</button>
@@ -312,11 +358,59 @@
             </div>
             </div>
         )}
+
+        {/* Delete account dialog — requires typing DELETE */}
+        {confirmDeleteAccount && (
+            <div style={s.overlay}>
+            <div style={{ ...s.dialog, maxWidth: '420px' }}>
+                <div style={{ ...s.dialogIconWrap, background: '#FFF0F0' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                </div>
+                <p style={s.dialogTitle}>Delete your account?</p>
+                <p style={{ ...s.dialogNote, marginBottom: '16px', textAlign: 'left', paddingLeft: 0 }}>
+                This will permanently delete <strong>{shop?.name}</strong> and all its data — income records, expenses, partners, and services. This action <strong>cannot be undone</strong>.
+                </p>
+                <div style={s.deleteAccountField}>
+                <label htmlFor="delete-confirm-input" style={s.deleteAccountLabel}>
+                    Type <strong>DELETE</strong> to confirm
+                </label>
+                <input
+                    id="delete-confirm-input"
+                    value={deleteAccountInput}
+                    onChange={e => setDeleteAccountInput(e.target.value)}
+                    placeholder="DELETE"
+                    style={{
+                    ...s.deleteAccountInput,
+                    borderColor: deleteAccountInput && deleteAccountInput !== 'DELETE' ? C.red : C.border,
+                    }}
+                    autoComplete="off"
+                />
+                </div>
+                <div style={s.dialogBtns}>
+                <button style={s.dialogCancel} onClick={closeDeleteAccount}>Cancel</button>
+                <button
+                    style={{
+                    ...s.dialogConfirm,
+                    opacity: deleteAccountInput === 'DELETE' ? 1 : 0.4,
+                    cursor: deleteAccountInput === 'DELETE' ? 'pointer' : 'not-allowed',
+                    }}
+                    onClick={doDeleteAccount}
+                    disabled={deleteAccountInput !== 'DELETE' || submitting}
+                >
+                    {submitting ? 'Deleting...' : 'Delete account'}
+                </button>
+                </div>
+            </div>
+            </div>
+        )}
         </Layout>
     );
     }
 
-    // ── Panel wrapper ─────────────────────────────────────────────────────────────
+    // ── Layout wrappers ───────────────────────────────────────────────────────────
 
     function Panel({ title, children }) {
     return (
@@ -327,12 +421,10 @@
     );
     }
 
-    // ── Table section ─────────────────────────────────────────────────────────────
-
     function TableSection({ title, count, accentColor, children }) {
     return (
         <div style={s.tableSection}>
-        <div style={s.tableSectionHeader}>
+        <div style={s.tableSectionHead}>
             <div style={{ ...s.tableSectionAccent, background: accentColor }} />
             <span style={s.tableSectionTitle}>{title}</span>
             {count > 0 && <span style={s.tableCount}>{count}</span>}
@@ -353,10 +445,10 @@
     if (isEditing) return (
         <EditCard
         fields={[
-            { label: 'Service', id: `ee-svc-${item.id}`, el: <select id={`ee-svc-${item.id}`} value={svc} onChange={e => setSvc(e.target.value)} style={s.editInput}>{services.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}</select> },
-            { label: 'Description', id: `ee-desc-${item.id}`, el: <input id={`ee-desc-${item.id}`} value={desc} onChange={e => setDesc(e.target.value)} style={s.editInput} /> },
-            { label: 'Amount', id: `ee-amt-${item.id}`, el: <input id={`ee-amt-${item.id}`} type="number" min="0.01" step="0.01" value={amt} onChange={e => setAmt(e.target.value)} style={s.editInput} /> },
-            { label: 'Date', id: `ee-date-${item.id}`, el: <input id={`ee-date-${item.id}`} type="date" value={date} onChange={e => setDate(e.target.value)} style={s.editInput} /> },
+            { label: 'Service',     id: `ee-svc-${item.id}`,  el: <select  id={`ee-svc-${item.id}`}  value={svc}  onChange={e => setSvc(e.target.value)}  style={s.editInput}>{services.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}</select> },
+            { label: 'Description', id: `ee-desc-${item.id}`, el: <input   id={`ee-desc-${item.id}`} value={desc} onChange={e => setDesc(e.target.value)} style={s.editInput} /> },
+            { label: 'Amount ($)',  id: `ee-amt-${item.id}`,  el: <input   id={`ee-amt-${item.id}`}  type="number" min="0.01" step="0.01" value={amt} onChange={e => setAmt(e.target.value)} style={s.editInput} /> },
+            { label: 'Date',        id: `ee-date-${item.id}`, el: <input   id={`ee-date-${item.id}`} type="date"  value={date} onChange={e => setDate(e.target.value)} style={s.editInput} /> },
         ]}
         onCancel={onCancelEdit}
         onSave={() => onSaveEdit({ description: desc, amount: amt, date, serviceType: svc })}
@@ -367,14 +459,14 @@
     return (
         <div style={s.tableRow}>
         <div style={s.rowMain}>
-            <div style={s.rowPrimary}>
+            <div style={s.rowTop}>
             <span style={s.rowTag}>{item.service_type || 'General'}</span>
             <span style={s.rowDesc}>{item.description}</span>
             </div>
-            <span style={s.rowDate}>{item.entry_date}</span>
+            <span style={s.rowMeta}>{item.entry_date}</span>
         </div>
         <div style={s.rowRight}>
-            <span style={{ ...s.rowAmount, color: C.green }}>${Number(item.amount).toFixed(2)}</span>
+            <span style={{ ...s.rowAmt, color: C.green }}>${Number(item.amount).toFixed(2)}</span>
             <RowBtns onEdit={onEdit} onDelete={onDelete} />
         </div>
         </div>
@@ -388,22 +480,14 @@
     const [date, setDate] = useState(item.expense_date);
     const [paid, setPaid] = useState(item.paid_by || currentUserEmail);
 
-    const CATS = [
-        { value: 'inventory', label: 'Inventory' },
-        { value: 'rent',      label: 'Rent' },
-        { value: 'labor',     label: 'Labor' },
-        { value: 'utility',   label: 'Utility' },
-        { value: 'misc',      label: 'Misc' },
-    ];
-
     if (isEditing) return (
         <EditCard
         fields={[
-            { label: 'Description', id: `ex-desc-${item.id}`, el: <input id={`ex-desc-${item.id}`} value={desc} onChange={e => setDesc(e.target.value)} style={s.editInput} /> },
-            { label: 'Amount', id: `ex-amt-${item.id}`, el: <input id={`ex-amt-${item.id}`} type="number" min="0.01" step="0.01" value={amt} onChange={e => setAmt(e.target.value)} style={s.editInput} /> },
-            { label: 'Category', id: `ex-cat-${item.id}`, el: <select id={`ex-cat-${item.id}`} value={cat} onChange={e => setCat(e.target.value)} style={s.editInput}>{CATS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select> },
-            { label: 'Paid By', id: `ex-paid-${item.id}`, el: <select id={`ex-paid-${item.id}`} value={paid} onChange={e => setPaid(e.target.value)} style={s.editInput}><option value={currentUserEmail}>Me</option>{partners.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select> },
-            { label: 'Date', id: `ex-date-${item.id}`, el: <input id={`ex-date-${item.id}`} type="date" value={date} onChange={e => setDate(e.target.value)} style={s.editInput} /> },
+            { label: 'Description', id: `ex-desc-${item.id}`, el: <input  id={`ex-desc-${item.id}`} value={desc} onChange={e => setDesc(e.target.value)} style={s.editInput} /> },
+            { label: 'Amount ($)',  id: `ex-amt-${item.id}`,  el: <input  id={`ex-amt-${item.id}`}  type="number" min="0.01" step="0.01" value={amt}  onChange={e => setAmt(e.target.value)}  style={s.editInput} /> },
+            { label: 'Category',   id: `ex-cat-${item.id}`,  el: <select id={`ex-cat-${item.id}`}  value={cat}  onChange={e => setCat(e.target.value)}  style={s.editInput}>{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select> },
+            { label: 'Paid By',    id: `ex-paid-${item.id}`, el: <select id={`ex-paid-${item.id}`} value={paid} onChange={e => setPaid(e.target.value)} style={s.editInput}><option value={currentUserEmail}>Me</option>{partners.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select> },
+            { label: 'Date',       id: `ex-date-${item.id}`, el: <input  id={`ex-date-${item.id}`} type="date"  value={date} onChange={e => setDate(e.target.value)} style={s.editInput} /> },
         ]}
         onCancel={onCancelEdit}
         onSave={() => onSaveEdit({ description: desc, amount: amt, category: cat, date, paidBy: paid })}
@@ -414,14 +498,14 @@
     return (
         <div style={s.tableRow}>
         <div style={s.rowMain}>
-            <div style={s.rowPrimary}>
+            <div style={s.rowTop}>
             <span style={s.rowCatTag}>{item.category || 'misc'}</span>
             <span style={s.rowDesc}>{item.description}</span>
             </div>
-            <span style={s.rowDate}>{item.paid_by || 'Unknown'} · {item.expense_date}</span>
+            <span style={s.rowMeta}>{item.paid_by || 'Unknown'} · {item.expense_date}</span>
         </div>
         <div style={s.rowRight}>
-            <span style={{ ...s.rowAmount, color: C.red }}>${Number(item.amount).toFixed(2)}</span>
+            <span style={{ ...s.rowAmt, color: C.red }}>${Number(item.amount).toFixed(2)}</span>
             <RowBtns onEdit={onEdit} onDelete={onDelete} />
         </div>
         </div>
@@ -435,8 +519,8 @@
     if (isEditing) return (
         <EditCard
         fields={[
-            { label: 'Name', id: `pt-name-${partner.id}`, el: <input id={`pt-name-${partner.id}`} value={name} onChange={e => setName(e.target.value)} style={s.editInput} /> },
-            { label: 'Equity %', id: `pt-eq-${partner.id}`, el: <input id={`pt-eq-${partner.id}`} type="number" min="1" max="100" step="1" value={eq} onChange={e => setEq(e.target.value)} style={s.editInput} /> },
+            { label: 'Name',     id: `pt-name-${partner.id}`, el: <input id={`pt-name-${partner.id}`} value={name} onChange={e => setName(e.target.value)} style={s.editInput} /> },
+            { label: 'Equity %', id: `pt-eq-${partner.id}`,   el: <input id={`pt-eq-${partner.id}`}   type="number" min="1" max="100" step="1" value={eq} onChange={e => setEq(e.target.value)} style={s.editInput} /> },
         ]}
         onCancel={onCancelEdit}
         onSave={() => onSaveEdit({ name, equityPct: eq })}
@@ -509,14 +593,11 @@
     );
     }
 
-    function EmptyRow({ icon, text, hint }) {
+    function EmptyRow({ text, hint }) {
     return (
         <div style={s.emptyRow}>
-        <span style={s.emptyRowIcon}>{icon}</span>
-        <div>
-            <div style={s.emptyRowText}>{text}</div>
-            {hint && <div style={s.emptyRowHint}>{hint}</div>}
-        </div>
+        <div style={s.emptyRowText}>{text}</div>
+        {hint && <div style={s.emptyRowHint}>{hint}</div>}
         </div>
     );
     }
@@ -534,93 +615,69 @@
     // ── Styles ─────────────────────────────────────────────────────────────────────
 
     const s = {
-    // Layout
-    page:       { display: 'flex', flexDirection: 'column', gap: '20px' },
-    twoColPage: { display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px', alignItems: 'start' },
-    formPanel:  { display: 'flex', flexDirection: 'column', gap: '16px' },
-    listPanel:  { display: 'flex', flexDirection: 'column', gap: '16px' },
-    dashGrid:   { display: 'grid', gridTemplateColumns: '280px 1fr', gap: '20px' },
-    dashLeft:   { display: 'flex', flexDirection: 'column', gap: '12px' },
-    dashRight:  { display: 'flex', flexDirection: 'column', gap: '16px' },
+    // ── Dashboard layout ──
+    dashPage:    { display: 'flex', flexDirection: 'column', gap: '20px' },
+    periodStrip: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' },
+    // Fixed: dashGrid uses fixed left column + flex right column, no overlap
+    dashGrid:  { display: 'grid', gridTemplateColumns: '260px 1fr', gap: '20px', alignItems: 'start' },
+    dashLeft:  { display: 'flex', flexDirection: 'column', gap: '12px' },
+    dashRight: { display: 'flex', flexDirection: 'column', gap: '16px' },
+
+    // ── Two-col pages (Income, Expenses, Partners, Settings) ──
+    // Fixed: left col is fixed 340px, right col takes remaining space
+    twoCol:   { display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px', alignItems: 'start' },
+    leftCol:  { display: 'flex', flexDirection: 'column', gap: '16px' },
+    rightCol: { display: 'flex', flexDirection: 'column', gap: '16px' },
 
     // Filter bar
     filterBar: { display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' },
     filterBtn: {
         padding: '7px 16px', borderRadius: '7px', cursor: 'pointer',
-        fontSize: '13px', fontFamily: "'Outfit', sans-serif",
-        transition: 'all 0.12s', letterSpacing: '0.1px',
+        fontSize: '13px', fontFamily: "'Outfit', sans-serif", transition: 'all 0.12s',
     },
 
     // Period cards
-    periodRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' },
     periodCard: {
         background: C.white, borderRadius: '12px', padding: '20px',
-        border: `1px solid ${C.border}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     },
-    periodTop:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
-    periodLabel:   { fontSize: '12px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' },
-    periodProfit:  { fontSize: '12px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', fontFamily: "'Outfit', sans-serif" },
-    periodIncome:  { fontSize: '26px', fontWeight: '800', color: C.dark, letterSpacing: '-0.5px', marginBottom: '10px' },
-    periodExpRow:  { display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: `1px solid ${C.border}` },
-    periodExpLabel:{ fontSize: '12px', color: C.muted },
-    periodExpVal:  { fontSize: '12px', fontWeight: '600', color: C.red },
+    periodTop:    { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
+    periodLabel:  { fontSize: '12px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' },
+    periodBadge:  { fontSize: '12px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' },
+    periodIncome: { fontSize: '26px', fontWeight: '800', color: C.dark, letterSpacing: '-0.5px', marginBottom: '10px' },
+    periodBottom: { display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: `1px solid ${C.border}` },
+    periodExpLabel: { fontSize: '12px', color: C.muted },
+    periodExpVal:   { fontSize: '12px', fontWeight: '600', color: C.red },
 
-    // Panel (form wrapper)
-    panel: {
-        background: C.white, borderRadius: '12px',
-        border: `1px solid ${C.border}`,
-        overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    },
-    panelTitle: {
-        fontSize: '12px', fontWeight: '700', color: C.muted,
-        textTransform: 'uppercase', letterSpacing: '0.8px',
-        padding: '14px 20px 0',
-    },
-    panelBody: { padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: '10px' },
+    // Panel
+    panel:      { background: C.white, borderRadius: '12px', border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+    panelTitle: { fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.8px', padding: '14px 20px 0' },
+    panelBody:  { padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: '10px' },
 
     // Table section
-    tableSection: {
-        background: C.white, borderRadius: '12px',
-        border: `1px solid ${C.border}`,
-        overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    },
-    tableSectionHeader: {
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '14px 20px', borderBottom: `1px solid ${C.border}`,
-    },
+    tableSection:     { background: C.white, borderRadius: '12px', border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+    tableSectionHead: { display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 20px', borderBottom: `1px solid ${C.border}` },
     tableSectionAccent: { width: '3px', height: '16px', borderRadius: '2px', flexShrink: 0 },
-    tableSectionTitle: { fontSize: '13px', fontWeight: '700', color: C.dark, flex: 1 },
-    tableCount: {
-        fontSize: '11px', fontWeight: '700', color: C.muted,
-        background: C.bg, padding: '2px 8px', borderRadius: '20px',
-        border: `1px solid ${C.border}`,
-    },
+    tableSectionTitle:  { fontSize: '13px', fontWeight: '700', color: C.dark, flex: 1 },
+    tableCount: { fontSize: '11px', fontWeight: '700', color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: '20px', border: `1px solid ${C.border}` },
 
     // Table rows
-    tableRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: '12px', padding: '12px 20px',
-        borderBottom: `1px solid ${C.border}`,
-        transition: 'background 0.1s',
-    },
-    rowMain:    { display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, minWidth: 0 },
-    rowPrimary: { display: 'flex', alignItems: 'center', gap: '8px' },
-    rowTag:     { fontSize: '11px', fontWeight: '600', color: C.green, background: C.greenBg, padding: '2px 7px', borderRadius: '4px', flexShrink: 0 },
-    rowCatTag:  { fontSize: '11px', fontWeight: '600', color: '#6D28D9', background: '#F5F3FF', padding: '2px 7px', borderRadius: '4px', flexShrink: 0, textTransform: 'capitalize' },
-    rowDesc:    { fontSize: '13px', color: C.body, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' },
-    rowDate:    { fontSize: '11px', color: C.muted },
-    rowRight:   { display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 },
-    rowAmount:  { fontSize: '14px', fontWeight: '800', letterSpacing: '-0.3px' },
-    rowBtns:    { display: 'flex', gap: '4px' },
-    equityChip: { fontSize: '12px', fontWeight: '700', color: C.mid, background: C.bg, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` },
+    tableRow:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 20px', borderBottom: `1px solid ${C.border}` },
+    rowMain:   { display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, minWidth: 0 },
+    rowTop:    { display: 'flex', alignItems: 'center', gap: '8px' },
+    rowTag:    { fontSize: '11px', fontWeight: '600', color: C.greenText, background: C.greenBg, padding: '2px 7px', borderRadius: '4px', flexShrink: 0 },
+    rowCatTag: { fontSize: '11px', fontWeight: '600', color: '#6D28D9', background: '#F5F3FF', padding: '2px 7px', borderRadius: '4px', flexShrink: 0, textTransform: 'capitalize' },
+    rowDesc:   { fontSize: '13px', color: C.body, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' },
+    rowMeta:   { fontSize: '11px', color: C.muted },
+    rowRight:  { display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 },
+    rowAmt:    { fontSize: '14px', fontWeight: '800', letterSpacing: '-0.3px' },
+    rowBtns:   { display: 'flex', gap: '4px' },
+    equityChip:{ fontSize: '12px', fontWeight: '700', color: C.mid, background: C.bg, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` },
 
     editBtn:   { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.border}`, background: C.white, color: C.mid, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
     deleteBtn: { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.redMid}`, background: C.redLight, color: C.red, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
 
-    // Edit inline
+    // Inline edit
     editCard:    { margin: '0 16px 4px', background: C.bg, borderRadius: '10px', padding: '14px', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: '10px' },
     editFields:  { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
     editField:   { display: 'flex', flexDirection: 'column', gap: '4px' },
@@ -630,42 +687,47 @@
     editSaveBtn:   { padding: '8px 18px', borderRadius: '7px', border: 'none', background: C.dark, color: C.white, cursor: 'pointer', fontWeight: '600', fontSize: '13px', fontFamily: "'Outfit', sans-serif" },
     editCancelBtn: { padding: '8px 14px', borderRadius: '7px', border: `1px solid ${C.border}`, background: C.white, color: C.mid, cursor: 'pointer', fontWeight: '500', fontSize: '13px', fontFamily: "'Outfit', sans-serif" },
 
+    // Account section
+    accountItem:  { display: 'flex', flexDirection: 'column', gap: '2px', paddingBottom: '10px', borderBottom: `1px solid ${C.border}` },
+    accountLabel: { fontSize: '10px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
+    accountValue: { fontSize: '14px', color: C.dark, fontWeight: '500' },
+    signoutBtn:   { padding: '9px', borderRadius: '8px', border: `1px solid ${C.border}`, background: 'transparent', color: C.mid, cursor: 'pointer', fontWeight: '500', fontSize: '13px', fontFamily: "'Outfit', sans-serif", marginTop: '4px', width: '100%' },
+
+    // Danger zone panel
+    dangerPanel:  { borderRadius: '12px', border: `1px solid ${C.redMid}`, overflow: 'hidden' },
+    dangerHeader: { background: C.redLight, padding: '12px 20px', borderBottom: `1px solid ${C.redMid}` },
+    dangerTitle:  { fontSize: '12px', fontWeight: '700', color: C.red, textTransform: 'uppercase', letterSpacing: '0.8px' },
+    dangerBody:   { background: C.white, padding: '16px 20px' },
+    dangerRow:    { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' },
+    dangerItemTitle: { fontSize: '14px', fontWeight: '700', color: C.dark, marginBottom: '4px' },
+    dangerItemDesc:  { fontSize: '12px', color: C.muted, lineHeight: '1.5', maxWidth: '220px' },
+    dangerBtn: { padding: '8px 14px', borderRadius: '8px', border: `1px solid ${C.redMid}`, background: C.redLight, color: C.red, cursor: 'pointer', fontWeight: '600', fontSize: '13px', fontFamily: "'Outfit', sans-serif", flexShrink: 0, whiteSpace: 'nowrap' },
+
+    // Delete account dialog
+    deleteAccountField: { display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px' },
+    deleteAccountLabel: { fontSize: '13px', color: C.mid },
+    deleteAccountInput: { padding: '11px 14px', borderRadius: '9px', border: `1.5px solid ${C.border}`, fontSize: '14px', background: C.surface, outline: 'none', color: C.dark, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box', letterSpacing: '2px', fontWeight: '700' },
+
     // Misc
     warningBanner: { background: C.amberBg, border: `1px solid ${C.amberBorder}`, color: C.amber, borderRadius: '10px', padding: '10px 14px', fontSize: '13px', fontWeight: '600' },
-
-    emptyRow: { display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '20px', color: C.muted },
-    emptyRowIcon: { fontSize: '20px', opacity: 0.4 },
-    emptyRowText: { fontSize: '13px', fontWeight: '600', color: C.mid, marginBottom: '2px' },
+    emptyRow:     { padding: '20px', display: 'flex', flexDirection: 'column', gap: '3px' },
+    emptyRowText: { fontSize: '13px', fontWeight: '600', color: C.mid },
     emptyRowHint: { fontSize: '12px', color: C.muted },
-
-    emptyCard: { textAlign: 'center', padding: '24px 16px' },
+    emptyCard:     { textAlign: 'center', padding: '20px 16px' },
     emptyCardIcon: { fontSize: '24px', display: 'block', marginBottom: '8px', opacity: 0.5 },
     emptyCardText: { fontSize: '13px', fontWeight: '600', color: C.mid, margin: '0 0 4px' },
     emptyCardHint: { fontSize: '12px', color: C.muted, margin: 0 },
 
-    // Account
-    accountItem: { display: 'flex', flexDirection: 'column', gap: '2px', paddingBottom: '10px', borderBottom: `1px solid ${C.border}` },
-    accountLabel: { fontSize: '10px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
-    accountValue: { fontSize: '14px', color: C.dark, fontWeight: '500' },
-    signoutBtn: { padding: '9px', borderRadius: '8px', border: `1px solid ${C.border}`, background: 'transparent', color: C.mid, cursor: 'pointer', fontWeight: '500', fontSize: '13px', fontFamily: "'Outfit', sans-serif", marginTop: '4px', width: '100%' },
+    // Toast
+    toast: { position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: "'Outfit', sans-serif", zIndex: 9999, whiteSpace: 'nowrap', boxShadow: '0 8px 32px rgba(0,0,0,0.24)' },
 
-    // Toast — dark pill floating at bottom
-    toast: {
-        position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
-        padding: '10px 20px', borderRadius: '8px',
-        fontSize: '13px', fontWeight: '600', fontFamily: "'Outfit', sans-serif",
-        zIndex: 9999, whiteSpace: 'nowrap',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
-    },
-
-    // Dialog
+    // Dialogs
     overlay:       { position: 'fixed', inset: 0, background: 'rgba(10,10,10,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
     dialog:        { background: C.white, borderRadius: '14px', padding: '24px', maxWidth: '380px', width: '100%', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' },
-    dialogHead:    { display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '12px' },
-    dialogIcon:    { width: '40px', height: '40px', background: C.redLight, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    dialogTitle:   { fontSize: '16px', fontWeight: '800', color: C.dark, margin: '2px 0 4px', letterSpacing: '-0.2px' },
-    dialogSub:     { fontSize: '13px', color: C.mid, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' },
-    dialogNote:    { fontSize: '13px', color: C.muted, margin: '0 0 20px', paddingLeft: '54px' },
+    dialogIconWrap:{ width: '40px', height: '40px', background: C.redLight, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px' },
+    dialogTitle:   { fontSize: '17px', fontWeight: '800', color: C.dark, margin: '0 0 6px', letterSpacing: '-0.2px' },
+    dialogSub:     { fontSize: '13px', color: C.mid, margin: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '320px' },
+    dialogNote:    { fontSize: '13px', color: C.muted, margin: '8px 0 20px' },
     dialogBtns:    { display: 'flex', gap: '8px', justifyContent: 'flex-end' },
     dialogCancel:  { padding: '10px 20px', borderRadius: '8px', border: `1px solid ${C.border}`, background: C.white, color: C.mid, cursor: 'pointer', fontWeight: '600', fontSize: '14px', fontFamily: "'Outfit', sans-serif" },
     dialogConfirm: { padding: '10px 20px', borderRadius: '8px', border: 'none', background: C.red, color: C.white, cursor: 'pointer', fontWeight: '600', fontSize: '14px', fontFamily: "'Outfit', sans-serif" },
