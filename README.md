@@ -1,3 +1,61 @@
+# 🚀 DayBooks – Shop Ledger App
+
+DayBooks is a full-stack web application designed for small shop owners to easily track daily income, expenses, and profits in real time.
+
+🔗 Live App: https://daybooks-app.vercel.app/
+
+---
+
+## ✨ Features
+
+- 🔐 Secure authentication (Signup/Login)
+- 📧 Email verification flow (Supabase Auth)
+- 🏪 Shop setup and onboarding
+- 💰 Add & manage income entries
+- 💸 Track expenses with categories
+- 📊 Real-time profit dashboard
+- 👥 Partner management with equity tracking
+- 🛠 Service tracking (custom shop services)
+- ⚡ Fast and responsive UI
+
+---
+
+## 🧠 Problem Solved
+
+Many small shop owners still rely on manual notebooks or spreadsheets to track daily business transactions.  
+DayBooks provides a **simple, digital, and real-time solution** to manage shop finances efficiently.
+
+---
+
+## 🛠 Tech Stack
+
+**Frontend**
+- React (Vite)
+- JavaScript (ES6+)
+- CSS
+
+**Backend / Services**
+- Supabase (Auth + PostgreSQL)
+- REST APIs
+
+**Deployment**
+- Vercel
+
+---
+
+## 🔐 Authentication Flow
+
+- User signs up with email & password
+- Verification email is sent
+- User must confirm email before accessing the app
+- Session is refreshed after verification
+- Protected routes ensure secure access
+
+---
+
+
+
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
