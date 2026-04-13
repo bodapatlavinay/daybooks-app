@@ -5,7 +5,7 @@ import { supabase } from './supabase';
 import LoginForm from './components/LoginForm';
 import ShopSetup from './components/ShopSetup';
 import Dashboard from './components/Dashboard';
-import VerifyEmail from './components/Verifyemail';
+import VerifyEmail from './components/VerifyEmail';
 import LandingPage from './components/LandingPage';
 
 export default function App() {
