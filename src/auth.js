@@ -1,29 +1,37 @@
 import { supabase } from './supabase';
 
 export async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  return { data, error };
+  return await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: 'https://daybooks-app.vercel.app/app',
+    },
+  });
 }
 
 export async function signIn(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  return { data, error };
+  return await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  return { error };
+  return await supabase.auth.signOut();
 }
 
 export async function getCurrentUser() {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
   return { user, error };
 }
 
-// Fix 8: Forgot password — sends reset email via Supabase
-export async function resetPassword(email, redirectTo) {
-  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: redirectTo || `${window.location.origin}/reset-password`,
+export async function resetPassword(email) {
+  return await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://daybooks-app.vercel.app/app',
   });
-  return { data, error };
 }
