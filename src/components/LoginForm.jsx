@@ -2,13 +2,42 @@ import { useState, useEffect } from 'react';
 import { C } from './styles';
 import { resetPassword } from '../auth';
 
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function Svg({ size = 20, color = 'currentColor', children }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
+
+function IconMail({ size, color }) {
+  return (
+    <Svg size={size} color={color}>
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+      <polyline points="22,6 12,13 2,6"/>
+    </Svg>
+  );
+}
+
+function IconCheck({ size, color }) {
+  return (
+    <Svg size={size} color={color}>
+      <polyline points="20 6 9 17 4 12"/>
+    </Svg>
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function LoginForm({ mode, message, messageType, submitting, onSubmit, onToggleMode }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [localError, setLocalError] = useState('');
 
-  // Safe window check — avoids SSR crash
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
@@ -25,14 +54,10 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
     return () => window.removeEventListener('resize', fn);
   }, []);
 
-  // Reset local state when switching between login/signup
   useEffect(() => {
-    setConfirm('');
-    setLocalError('');
-    setForgotMode(false);
-    setForgotSent(false);
-    setForgotError('');
-    setForgotEmail('');
+    setConfirm(''); setLocalError('');
+    setForgotMode(false); setForgotSent(false);
+    setForgotError(''); setForgotEmail('');
   }, [mode]);
 
   function handleSubmit(e) {
@@ -56,10 +81,10 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
     setForgotSent(true);
   }
 
-  const errorMsg   = localError || (messageType === 'error' ? message : '');
+  const errorMsg   = localError || (messageType === 'error'   ? message : '');
   const successMsg = !localError && messageType === 'success' ? message : '';
 
-  // ── Forgot password screen ─────────────────────────────────────────────────
+  // ── Forgot password screen ────────────────────────────────────────────────
   if (forgotMode) {
     return (
       <div style={s.page}>
@@ -70,13 +95,17 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
 
             {forgotSent ? (
               <div style={s.sentWrap}>
-                <div style={s.sentIcon}>✉️</div>
+                {/* Icon circle */}
+                <div style={s.sentIconWrap}>
+                  <IconMail size={28} color="#0284C7" />
+                </div>
+
                 <h2 style={s.cardTitle}>Check your inbox</h2>
                 <p style={s.cardSub}>
                   We sent a password reset link to <strong>{forgotEmail}</strong>.
                   Click the link in the email to reset your password.
                 </p>
-                <p style={{ ...s.cardSub, fontSize: '12px', color: C.muted, marginTop: '8px' }}>
+                <p style={{ ...s.cardSub, fontSize: '12px', color: C.muted, marginTop: '4px' }}>
                   Don't see it? Check your spam or junk folder.
                 </p>
                 <button style={s.submitBtn}
@@ -88,23 +117,17 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
               <form onSubmit={handleForgotSubmit} style={s.formBody}>
                 <div style={s.cardHead}>
                   <h2 style={s.cardTitle}>Reset your password</h2>
-                  <p style={s.cardSub}>
-                    Enter your email address and we'll send you a link to reset your password.
-                  </p>
+                  <p style={s.cardSub}>Enter your email and we'll send you a reset link.</p>
                 </div>
 
                 <Field label="Email address" id="forgot-email">
-                  <input
-                    id="forgot-email" name="email" type="email"
+                  <input id="forgot-email" name="email" type="email"
                     placeholder="you@example.com"
                     value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
-                    style={s.input} autoComplete="email" required autoFocus
-                  />
+                    style={s.input} autoComplete="email" required autoFocus />
                 </Field>
 
-                {forgotError && (
-                  <div style={s.errorBox}>⚠ {forgotError}</div>
-                )}
+                {forgotError && <div style={s.errorBox}>⚠ {forgotError}</div>}
 
                 <button type="submit"
                   style={{ ...s.submitBtn, opacity: forgotLoading ? 0.7 : 1, cursor: forgotLoading ? 'not-allowed' : 'pointer' }}
@@ -123,7 +146,7 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
     );
   }
 
-  // ── Login / Signup screen ──────────────────────────────────────────────────
+  // ── Login / Signup screen ─────────────────────────────────────────────────
   return (
     <div style={s.page}>
       <div style={s.wrapper}>
@@ -143,45 +166,34 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
           </div>
 
           <Field label="Email address" id="auth-email">
-            <input
-              id="auth-email" name="email" type="email"
+            <input id="auth-email" name="email" type="email"
               placeholder="you@example.com"
               value={email} onChange={e => setEmail(e.target.value)}
-              style={s.input} autoComplete="email" required
-            />
+              style={s.input} autoComplete="email" required />
           </Field>
 
           <Field label="Password" id="auth-password">
-            <input
-              id="auth-password" name="password" type="password"
+            <input id="auth-password" name="password" type="password"
               placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
               value={password} onChange={e => setPassword(e.target.value)}
               style={s.input}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              required
-            />
+              required />
           </Field>
 
-          {/* Confirm password — signup only */}
           {mode === 'signup' && (
             <Field label="Confirm password" id="auth-confirm">
-              <input
-                id="auth-confirm" name="confirm-password" type="password"
+              <input id="auth-confirm" name="confirm-password" type="password"
                 placeholder="Re-enter your password"
                 value={confirm} onChange={e => setConfirm(e.target.value)}
-                style={{
-                  ...s.input,
-                  borderColor: confirm && confirm !== password ? C.red : C.border,
-                }}
-                autoComplete="new-password" required
-              />
+                style={{ ...s.input, borderColor: confirm && confirm !== password ? C.red : C.border }}
+                autoComplete="new-password" required />
               {confirm && confirm !== password && (
                 <span style={s.fieldError}>Passwords don't match</span>
               )}
             </Field>
           )}
 
-          {/* Forgot password — login only */}
           {mode === 'login' && (
             <div style={s.forgotRow}>
               <button type="button" style={s.forgotBtn}
@@ -208,7 +220,6 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
           {errorMsg && <div style={s.errorBox}>⚠ {errorMsg}</div>}
           {successMsg && <div style={s.successBox}>✓ {successMsg}</div>}
 
-          {/* Helper hint for new users */}
           {mode === 'signup' && !errorMsg && !successMsg && (
             <p style={s.hint}>
               After signing up, check your email to verify your account before logging in.
@@ -220,7 +231,7 @@ export default function LoginForm({ mode, message, messageType, submitting, onSu
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function Field({ label, id, children }) {
   return (
@@ -244,7 +255,7 @@ function BrandSection() {
           'Settle partner finances automatically',
         ].map(f => (
           <div key={f} style={s.featureRow}>
-            <div style={s.featureCheck}>✓</div>
+            <div style={s.featureCheck}><IconCheck size={11} color="#FF6B6B" /></div>
             <span style={s.featureText}>{f}</span>
           </div>
         ))}
@@ -262,41 +273,23 @@ function MobileLogo() {
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = {
-  page: {
-    minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: '#111110', padding: '24px 16px', boxSizing: 'border-box',
-    fontFamily: "'Outfit', system-ui, sans-serif",
-  },
-  wrapper: {
-    width: '100%', maxWidth: '860px',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '64px',
-  },
-  brand: {
-    flex: 1, display: 'flex', flexDirection: 'column',
-    alignItems: 'flex-start', justifyContent: 'center', gap: '16px', minWidth: 0,
-  },
+  page:    { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111110', padding: '24px 16px', boxSizing: 'border-box', fontFamily: "'Outfit', system-ui, sans-serif" },
+  wrapper: { width: '100%', maxWidth: '860px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '64px' },
+
+  brand:        { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: '16px', minWidth: 0 },
   logoMark:     { width: '52px', height: '52px', background: C.red, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   logoLetter:   { fontSize: '28px', fontWeight: '900', color: '#fff', lineHeight: 1 },
   brandName:    { fontSize: '38px', fontWeight: '900', color: '#fff', letterSpacing: '-1px', margin: 0 },
   brandTagline: { fontSize: '15px', color: 'rgba(255,255,255,0.45)', margin: 0 },
   features:     { display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' },
   featureRow:   { display: 'flex', alignItems: 'center', gap: '10px' },
-  featureCheck: {
-    width: '20px', height: '20px', background: 'rgba(200,8,21,0.25)', color: '#FF6B6B',
-    borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '11px', fontWeight: '800', flexShrink: 0,
-  },
-  featureText: { fontSize: '14px', color: 'rgba(255,255,255,0.6)' },
+  featureCheck: { width: '20px', height: '20px', background: 'rgba(200,8,21,0.25)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  featureText:  { fontSize: '14px', color: 'rgba(255,255,255,0.6)' },
 
-  card: {
-    width: '100%', maxWidth: '400px', flexShrink: 0,
-    background: '#fff', borderRadius: '16px', padding: '36px 32px',
-    display: 'flex', flexDirection: 'column', gap: '16px',
-    boxShadow: '0 32px 80px rgba(0,0,0,0.45)',
-  },
+  card:     { width: '100%', maxWidth: '400px', flexShrink: 0, background: '#fff', borderRadius: '16px', padding: '36px 32px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 32px 80px rgba(0,0,0,0.45)' },
   formBody: { display: 'flex', flexDirection: 'column', gap: '16px' },
 
   mobileLogoRow:  { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' },
@@ -310,34 +303,18 @@ const s = {
   field:      { display: 'flex', flexDirection: 'column', gap: '6px' },
   label:      { fontSize: '11px', fontWeight: '700', color: '#3D3D3D', textTransform: 'uppercase', letterSpacing: '0.6px' },
   fieldError: { fontSize: '12px', color: C.red, fontWeight: '500' },
-  input: {
-    padding: '12px 14px', borderRadius: '9px', border: `1.5px solid ${C.border}`,
-    fontSize: '14px', background: '#FAFAF8', outline: 'none', color: '#0A0A0A',
-    fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box',
-  },
+  input:      { padding: '12px 14px', borderRadius: '9px', border: `1.5px solid ${C.border}`, fontSize: '14px', background: '#FAFAF8', outline: 'none', color: '#0A0A0A', fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' },
 
   forgotRow: { display: 'flex', justifyContent: 'flex-end', marginTop: '-8px' },
-  forgotBtn: {
-    background: 'none', border: 'none', color: C.mid, fontSize: '13px',
-    cursor: 'pointer', padding: 0, fontFamily: "'Outfit', sans-serif",
-    textDecoration: 'underline', textUnderlineOffset: '2px',
-  },
+  forgotBtn: { background: 'none', border: 'none', color: C.mid, fontSize: '13px', cursor: 'pointer', padding: 0, fontFamily: "'Outfit', sans-serif", textDecoration: 'underline', textUnderlineOffset: '2px' },
 
-  submitBtn: {
-    padding: '13px', borderRadius: '9px', border: 'none',
-    background: C.red, color: '#fff', fontWeight: '700', fontSize: '15px',
-    fontFamily: "'Outfit', sans-serif", marginTop: '4px', cursor: 'pointer',
-  },
-  toggleBtn: {
-    padding: '11px', borderRadius: '9px', border: `1.5px solid ${C.border}`,
-    background: 'transparent', color: '#6B6B6B', fontWeight: '500', fontSize: '13px',
-    fontFamily: "'Outfit', sans-serif", cursor: 'pointer', textAlign: 'center',
-  },
+  submitBtn: { padding: '13px', borderRadius: '9px', border: 'none', background: C.red, color: '#fff', fontWeight: '700', fontSize: '15px', fontFamily: "'Outfit', sans-serif", marginTop: '4px', cursor: 'pointer' },
+  toggleBtn: { padding: '11px', borderRadius: '9px', border: `1.5px solid ${C.border}`, background: 'transparent', color: '#6B6B6B', fontWeight: '500', fontSize: '13px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer', textAlign: 'center' },
 
   errorBox:   { padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '600', background: C.redLight, color: C.red, border: `1px solid ${C.redMid}`, lineHeight: '1.5' },
   successBox: { padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '600', background: C.greenBg, color: C.greenText, border: `1px solid ${C.greenBorder}` },
   hint:       { fontSize: '12px', color: C.muted, margin: 0, textAlign: 'center', lineHeight: '1.6' },
 
-  sentWrap: { display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', textAlign: 'center', padding: '8px 0' },
-  sentIcon: { fontSize: '44px' },
+  sentWrap:     { display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', textAlign: 'center', padding: '8px 0' },
+  sentIconWrap: { width: '64px', height: '64px', borderRadius: '18px', background: '#F0F9FF', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 };
