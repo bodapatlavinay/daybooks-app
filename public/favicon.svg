@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#c80815"/>
-  <text x="50" y="68" font-family="system-ui, sans-serif" font-size="58" font-weight="900"
-    fill="white" text-anchor="middle">D</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DayBooks">
+  <rect width="64" height="64" rx="16" fill="#111110" />
+  <path d="M18 14h14c9.94 0 18 8.06 18 18s-8.06 18-18 18H18z" fill="#c80815" />
+  <path d="M28 22h4.5c5.8 0 10.5 4.7 10.5 10.5S38.3 43 32.5 43H28z" fill="#ffffff" />
 </svg>

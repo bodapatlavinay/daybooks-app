@@ -19,7 +19,7 @@
                 style={{
                 ...styles.tab,
                 background: isActive ? '#c80815' : '#fff',
-                color: isActive ? '#fff' : '#555',
+                color: isActive ? '#fff' : '#555555',
                 border: isActive ? '1px solid #c80815' : '1px solid #e6e6e6',
                 boxShadow: isActive
                     ? '0 4px 12px rgba(200,8,21,0.2)'
