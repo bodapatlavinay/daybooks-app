@@ -234,7 +234,7 @@ function DayBooksApp() {
 
   // ── Entries ───────────────────────────────────────────────────────────────
 
-  async function handleAddEntry({ description, amount, date, serviceType }) {
+  async function handleAddEntry({ description, amount, date, serviceType, paymentType }) {
     setMessage('');
     if (!description.trim() || !amount || Number(amount) <= 0) {
       showMessage('Please enter a valid description and amount', 'error'); return;
@@ -242,7 +242,7 @@ function DayBooksApp() {
     setSubmitting(true);
     const { error } = await supabase.from('entries').insert({
       shop_id: shop.id, description: description.trim(),
-      amount: Number(amount), kind: 'sale', entry_date: date, service_type: serviceType || null,
+      amount: Number(amount), kind: 'sale', entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash',
     });
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
     showMessage('Income added', 'success');
@@ -250,14 +250,14 @@ function DayBooksApp() {
     setSubmitting(false);
   }
 
-  async function handleEditEntry(id, { description, amount, date, serviceType }) {
+  async function handleEditEntry(id, { description, amount, date, serviceType, paymentType }) {
     setMessage('');
     if (!description.trim() || !amount || Number(amount) <= 0) {
       showMessage('Please enter a valid description and amount', 'error'); return;
     }
     setSubmitting(true);
     const { error } = await supabase.from('entries')
-      .update({ description: description.trim(), amount: Number(amount), entry_date: date, service_type: serviceType || null })
+      .update({ description: description.trim(), amount: Number(amount), entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash' })
       .eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
     showMessage('Entry updated', 'success');

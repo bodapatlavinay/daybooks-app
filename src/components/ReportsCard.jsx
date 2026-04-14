@@ -77,6 +77,38 @@ function getRange(period, customFrom, customTo) {
   return { from: null, to: null, label: 'All Time' };
 }
 
+
+// Build daily breakdown for current week (Sun–Sat)
+function buildDailyWeek(allEntries, allExpenses) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay());
+  const days = [];
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+    const dEnd = new Date(d); dEnd.setHours(23,59,59,999);
+    const isPast = d <= today;
+    const isToday = d.toDateString() === today.toDateString();
+    const dayEntries  = allEntries.filter(e  => inRange(e.entry_date,   d, dEnd));
+    const dayExpenses = allExpenses.filter(e => inRange(e.expense_date, d, dEnd));
+    const income  = dayEntries.reduce((s, e) => s + Number(e.amount||0), 0);
+    const expense = dayExpenses.reduce((s, e) => s + Number(e.amount||0), 0);
+    days.push({ date: d, dayName: DAY_NAMES[i], income, expense, profit: income - expense, isPast, isToday, txCount: dayEntries.length + dayExpenses.length });
+  }
+  return days;
+}
+
+// Build last week totals for comparison
+function buildLastWeekTotals(allEntries, allExpenses) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const thisWeekStart = new Date(today); thisWeekStart.setDate(today.getDate() - today.getDay());
+  const lastWeekEnd   = new Date(thisWeekStart); lastWeekEnd.setDate(lastWeekEnd.getDate() - 1); lastWeekEnd.setHours(23,59,59,999);
+  const lastWeekStart = new Date(lastWeekEnd); lastWeekStart.setDate(lastWeekEnd.getDate() - 6); lastWeekStart.setHours(0,0,0,0);
+  const income  = allEntries.filter(e  => inRange(e.entry_date,   lastWeekStart, lastWeekEnd)).reduce((s,e) => s + Number(e.amount||0), 0);
+  const expense = allExpenses.filter(e => inRange(e.expense_date, lastWeekStart, lastWeekEnd)).reduce((s,e) => s + Number(e.amount||0), 0);
+  return { income, expense, profit: income - expense };
+}
+
 // Build weekly breakdown: given a date range, split into calendar weeks (Sun–Sat)
 // Returns array of { label, from, to, entries, expenses, income, expense, profit }
 function buildWeeks(from, to, allEntries, allExpenses) {
@@ -306,7 +338,7 @@ const PERIODS = [
 ];
 
 export default function ReportsCard({ entries: allEntries, expenses: allExpenses, shopName, shop }) {
-  const [period, setPeriod]   = useState('month');
+  const [period, setPeriod]   = useState('week');
   const [customFrom, setFrom] = useState('');
   const [customTo,   setTo]   = useState('');
   const [expandedWeek, setExpandedWeek] = useState(null);
@@ -334,6 +366,21 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
 
   const name = shopName || shop?.name || 'Shop';
 
+  // ── This Week at a Glance data (always computed from raw data) ───────────
+  const isWeekView   = period === 'week';
+  const dailyWeek    = useMemo(() => buildDailyWeek(allEntries, allExpenses), [allEntries, allExpenses]);
+  const lastWeekTots = useMemo(() => buildLastWeekTotals(allEntries, allExpenses), [allEntries, allExpenses]);
+  const weekMaxBar   = Math.max(...dailyWeek.map(d => Math.max(d.income, d.expense)), 1);
+  // Top service this week
+  const weekEntries  = dailyWeek.flatMap(d => allEntries.filter(e => inRange(e.entry_date, d.date, new Date(d.date.getTime() + 86399999))));
+  const weekSvcMap   = weekEntries.reduce((a, e) => { const k = e.service_type || 'General'; a[k] = (a[k]||0) + Number(e.amount||0); return a; }, {});
+  const topService   = Object.entries(weekSvcMap).sort((a,b) => b[1]-a[1])[0];
+  // Week income so far vs last week
+  const weekIncomeSoFar = dailyWeek.reduce((s, d) => s + d.income, 0);
+  const weekExpSoFar    = dailyWeek.reduce((s, d) => s + d.expense, 0);
+  const weekProfitSoFar = weekIncomeSoFar - weekExpSoFar;
+  const vsLastIncome    = lastWeekTots.income > 0 ? ((weekIncomeSoFar - lastWeekTots.income) / lastWeekTots.income * 100) : null;
+
   return (
     <div style={s.wrap}>
 
@@ -341,7 +388,7 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
       <div style={s.filterCard}>
         <div style={s.filterTop}>
           <div>
-            <div style={s.filterTitle}>📊 Reports</div>
+            <div style={s.filterTitle}>{isWeekView ? "This Week" : "📊 Reports"}</div>
             <div style={s.filterSub}>{range.label}</div>
           </div>
           <div style={s.actions}>
@@ -392,6 +439,164 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
           </div>
         )}
       </div>
+
+      {/* ── THIS WEEK AT A GLANCE — shows when period === 'week' ── */}
+      {isWeekView && (
+        <div style={s.glanceCard}>
+
+          {/* Header row */}
+          <div style={s.glanceHeader}>
+            <div>
+              <div style={s.glanceTitle}>This Week at a Glance</div>
+              <div style={s.glanceSub}>
+                {(() => {
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const ws = new Date(today); ws.setDate(today.getDate() - today.getDay());
+                  return `${fmtShort(ws)} – ${fmtShort(today)}`;
+                })()}
+              </div>
+            </div>
+            {vsLastIncome !== null && (
+              <div style={{ ...s.vsChip, background: vsLastIncome >= 0 ? C.greenBg : C.redLight, color: vsLastIncome >= 0 ? C.greenText : C.red, border: `1px solid ${vsLastIncome >= 0 ? C.greenBorder : '#FACACA'}` }}>
+                {vsLastIncome >= 0 ? '↑' : '↓'} {Math.abs(vsLastIncome).toFixed(0)}% vs last week
+              </div>
+            )}
+          </div>
+
+          {/* 3 stat pills */}
+          <div style={s.glanceStats}>
+            <div style={s.glanceStat}>
+              <div style={s.glanceStatLabel}>Income</div>
+              <div style={{ ...s.glanceStatVal, color: C.green }}>${weekIncomeSoFar.toFixed(2)}</div>
+            </div>
+            <div style={s.glanceDivider} />
+            <div style={s.glanceStat}>
+              <div style={s.glanceStatLabel}>Expenses</div>
+              <div style={{ ...s.glanceStatVal, color: C.red }}>${weekExpSoFar.toFixed(2)}</div>
+            </div>
+            <div style={s.glanceDivider} />
+            <div style={s.glanceStat}>
+              <div style={s.glanceStatLabel}>Net Profit</div>
+              <div style={{ ...s.glanceStatVal, color: weekProfitSoFar >= 0 ? C.green : C.red }}>
+                {weekProfitSoFar >= 0 ? '+' : ''}${weekProfitSoFar.toFixed(2)}
+              </div>
+            </div>
+          </div>
+
+          {/* Daily bar chart */}
+          <div style={s.chartWrap}>
+            <div style={s.chartTitle}>Daily Income vs Expenses</div>
+            <div style={s.chartArea}>
+              {dailyWeek.map((day, i) => (
+                <div key={i} style={s.chartCol}>
+                  {/* Bars */}
+                  <div style={s.barsWrap}>
+                    {/* Income bar */}
+                    <div style={{ ...s.barGroup }}>
+                      <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'flex-end' }}>
+                        {day.income > 0 && (
+                          <div style={{
+                            width: '100%',
+                            height: `${Math.max((day.income / weekMaxBar) * 100, 4)}%`,
+                            background: day.isToday ? C.green : '#86EFAC',
+                            borderRadius: '3px 3px 0 0',
+                            transition: 'height 0.3s',
+                            minHeight: day.income > 0 ? '4px' : '0',
+                          }} />
+                        )}
+                      </div>
+                    </div>
+                    {/* Expense bar */}
+                    <div style={{ ...s.barGroup }}>
+                      <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'flex-end' }}>
+                        {day.expense > 0 && (
+                          <div style={{
+                            width: '100%',
+                            height: `${Math.max((day.expense / weekMaxBar) * 100, 4)}%`,
+                            background: day.isToday ? C.red : '#FACACA',
+                            borderRadius: '3px 3px 0 0',
+                            transition: 'height 0.3s',
+                            minHeight: day.expense > 0 ? '4px' : '0',
+                          }} />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Day label */}
+                  <div style={{
+                    ...s.dayLabel,
+                    color: day.isToday ? C.dark : day.isPast ? C.mid : C.faint,
+                    fontWeight: day.isToday ? '800' : '500',
+                  }}>
+                    {day.dayName}
+                    {day.isToday && <span style={s.todayDot} />}
+                  </div>
+
+                  {/* Amount on hover / if has data */}
+                  {(day.income > 0 || day.expense > 0) && (
+                    <div style={s.dayAmt}>
+                      {day.income > 0 && <span style={{ color: C.greenText }}>${day.income >= 1000 ? (day.income/1000).toFixed(1)+'k' : day.income.toFixed(0)}</span>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Legend */}
+            <div style={s.chartLegend}>
+              <div style={s.legendItem}><div style={{ ...s.legendDot, background: C.green }} /><span>Income</span></div>
+              <div style={s.legendItem}><div style={{ ...s.legendDot, background: C.red }} /><span>Expenses</span></div>
+            </div>
+          </div>
+
+          {/* Day-by-day table */}
+          <div style={s.dayTable}>
+            <div style={s.dayTableHead}>
+              <span style={s.dayTH}>Day</span>
+              <span style={s.dayTH}>Income</span>
+              <span style={s.dayTH}>Expenses</span>
+              <span style={s.dayTH}>Profit</span>
+              <span style={s.dayTH}>Txns</span>
+            </div>
+            {dailyWeek.filter(d => d.isPast || d.isToday).map((day, i) => (
+              <div key={i} style={{ ...s.dayRow, background: day.isToday ? '#F7F6F3' : 'transparent', fontWeight: day.isToday ? '700' : '400' }}>
+                <span style={{ ...s.dayCell, color: day.isToday ? C.dark : C.mid }}>
+                  {day.isToday ? `${day.dayName} (Today)` : day.dayName}
+                </span>
+                <span style={{ ...s.dayCell, color: day.income > 0 ? C.green : C.faint }}>
+                  {day.income > 0 ? `+$${day.income.toFixed(2)}` : '—'}
+                </span>
+                <span style={{ ...s.dayCell, color: day.expense > 0 ? C.red : C.faint }}>
+                  {day.expense > 0 ? `-$${day.expense.toFixed(2)}` : '—'}
+                </span>
+                <span style={{ ...s.dayCell, color: day.profit > 0 ? C.green : day.profit < 0 ? C.red : C.faint }}>
+                  {day.income > 0 || day.expense > 0 ? `${day.profit >= 0 ? '+' : ''}$${day.profit.toFixed(2)}` : '—'}
+                </span>
+                <span style={{ ...s.dayCell, color: day.txCount > 0 ? C.dark : C.faint }}>
+                  {day.txCount > 0 ? day.txCount : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Top insight row */}
+          {topService && (
+            <div style={s.insightRow}>
+              <div style={s.insightChip}>
+                <span style={s.insightLabel}>Top service this week</span>
+                <span style={s.insightVal}>{topService[0]} · <strong>${topService[1].toFixed(2)}</strong></span>
+              </div>
+              {lastWeekTots.income > 0 && (
+                <div style={s.insightChip}>
+                  <span style={s.insightLabel}>Last week income</span>
+                  <span style={s.insightVal}><strong>${lastWeekTots.income.toFixed(2)}</strong></span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {!hasData ? (
         <div style={s.emptyPage}>
@@ -730,4 +935,42 @@ const s = {
   emptyTitle: { fontSize: '17px', fontWeight: '800', color: C.dark, margin: '0 0 8px' },
   emptySub:   { fontSize: '14px', color: C.muted, margin: 0, maxWidth: '320px', lineHeight: '1.6' },
   empty:      { fontSize: '12px', color: C.muted, margin: 0 },
+
+  // ── This Week at a Glance styles ──────────────────────────────────────────
+  glanceCard:   { background: C.white, borderRadius: '14px', border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  glanceHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 20px 0', flexWrap: 'wrap', gap: '10px' },
+  glanceTitle:  { fontSize: '16px', fontWeight: '800', color: C.dark, letterSpacing: '-0.2px' },
+  glanceSub:    { fontSize: '12px', color: C.muted, marginTop: '3px' },
+  vsChip:       { fontSize: '12px', fontWeight: '700', padding: '5px 12px', borderRadius: '20px' },
+
+  glanceStats:  { display: 'flex', alignItems: 'center', padding: '16px 20px', gap: '0' },
+  glanceStat:   { flex: 1, textAlign: 'center' },
+  glanceDivider:{ width: '1px', height: '36px', background: C.border, flexShrink: 0 },
+  glanceStatLabel:{ fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' },
+  glanceStatVal:  { fontSize: '20px', fontWeight: '900', letterSpacing: '-0.5px' },
+
+  chartWrap:  { padding: '0 20px 16px', borderTop: `1px solid ${C.border}`, paddingTop: '16px' },
+  chartTitle: { fontSize: '12px', fontWeight: '700', color: C.mid, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '14px' },
+  chartArea:  { display: 'flex', alignItems: 'flex-end', gap: '6px', height: '120px' },
+  chartCol:   { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', height: '100%' },
+  barsWrap:   { flex: 1, width: '100%', display: 'flex', gap: '2px', alignItems: 'flex-end' },
+  barGroup:   { flex: 1, height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' },
+  dayLabel:   { fontSize: '11px', textAlign: 'center', position: 'relative', lineHeight: 1 },
+  todayDot:   { display: 'block', width: '4px', height: '4px', borderRadius: '50%', background: C.red, margin: '3px auto 0' },
+  dayAmt:     { fontSize: '10px', color: C.muted, textAlign: 'center', lineHeight: 1 },
+
+  chartLegend:{ display: 'flex', gap: '16px', marginTop: '10px' },
+  legendItem: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: C.mid },
+  legendDot:  { width: '8px', height: '8px', borderRadius: '2px' },
+
+  dayTable:    { borderTop: `1px solid ${C.border}` },
+  dayTableHead:{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 0.5fr', padding: '8px 20px', background: C.bg, gap: '4px' },
+  dayTH:       { fontSize: '10px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  dayRow:      { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 0.5fr', padding: '10px 20px', borderTop: `1px solid ${C.border}`, gap: '4px', transition: 'background 0.1s' },
+  dayCell:     { fontSize: '13px' },
+
+  insightRow:  { display: 'flex', gap: '10px', padding: '14px 20px', borderTop: `1px solid ${C.border}`, flexWrap: 'wrap' },
+  insightChip: { display: 'flex', flexDirection: 'column', gap: '2px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 14px', flex: 1 },
+  insightLabel:{ fontSize: '10px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  insightVal:  { fontSize: '13px', color: C.dark },
 };

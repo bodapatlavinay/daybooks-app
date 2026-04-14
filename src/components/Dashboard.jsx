@@ -7,6 +7,7 @@ import SettlementCard from './SettlementCard';
 import ReportsCard from './ReportsCard';
 import { PartnersForm, ServicesForm, SettingsForm } from './Forms';
 import { C } from './styles';
+import { PAYMENT_TYPES, paymentLabel, paymentStyle } from './EntryForm';
 
 const TABS_WITH_FILTER = ['entries', 'expenses'];
 
@@ -413,6 +414,7 @@ function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit,
   const [amt,  setAmt]  = useState(String(item.amount));
   const [date, setDate] = useState(item.entry_date);
   const [svc,  setSvc]  = useState(item.service_type || '');
+  const [pay,  setPay]  = useState(item.payment_type || 'cash');
 
   // Reset state to current item values every time Edit is opened
   function handleEdit() {
@@ -420,6 +422,7 @@ function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit,
     setAmt(String(item.amount));
     setDate(item.entry_date);
     setSvc(item.service_type || (services[0]?.name || ''));
+    setPay(item.payment_type || 'cash');
     onEdit();
   }
 
@@ -445,10 +448,25 @@ function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit,
           <input id={`ee-date-${item.id}`} type="date" value={date} onChange={e => setDate(e.target.value)} style={s.editInput} />
         </div>
       </div>
+      {/* Payment method */}
+      <div>
+        <div style={{ fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Payment Method</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {PAYMENT_TYPES.map(p => {
+            const active = pay === p.value;
+            return (
+              <button key={p.value} type="button" onClick={() => setPay(p.value)}
+                style={{ padding: '5px 11px', borderRadius: '20px', fontSize: '11px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: active ? '700' : '500', background: active ? p.bg : '#FAFAF8', color: active ? p.color : C.muted, border: `1.5px solid ${active ? p.border : C.border}` }}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div style={s.editActions}>
         <button style={s.editCancelBtn} onClick={onCancelEdit}>Cancel</button>
         <button style={s.editSaveBtn} disabled={submitting}
-          onClick={() => onSaveEdit({ description: desc, amount: amt, date, serviceType: svc })}>
+          onClick={() => onSaveEdit({ description: desc, amount: amt, date, serviceType: svc, paymentType: pay })}>
           {submitting ? 'Saving...' : 'Save changes'}
         </button>
       </div>
@@ -460,6 +478,7 @@ function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit,
       <div style={s.rowMain}>
         <div style={s.rowTop}>
           <span style={s.rowTag}>{item.service_type || 'General'}</span>
+          {(() => { const ps = paymentStyle(item.payment_type || 'cash'); return <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px', flexShrink: 0, background: ps.bg, color: ps.color, border: `1px solid ${ps.border}` }}>{paymentLabel(item.payment_type || 'cash')}</span>; })()}
           <span style={s.rowDesc}>{item.description}</span>
         </div>
         <span style={s.rowMeta}>{item.entry_date}</span>
