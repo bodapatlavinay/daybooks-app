@@ -161,7 +161,7 @@ export default function VerifyEmail({ email, onLogout, onConfirmed }) {
           {[
             { n: '1', text: 'Open your email inbox' },
             { n: '2', text: 'Click "Confirm my account" in the email' },
-            { n: '3', text: 'Come back here and tap the button below' },
+            
           ].map(({ n, text }) => (
             <div key={n} style={s.stepRow}>
               <div style={s.stepNum}>{n}</div>
@@ -175,11 +175,11 @@ export default function VerifyEmail({ email, onLogout, onConfirmed }) {
           &nbsp; Don't see it? Check your <strong>spam or junk folder</strong>.
         </div>
 
-        <button onClick={handleCheckNow}
+        {/* <button onClick={handleCheckNow}
           style={{ ...s.primaryBtn, opacity: checking ? 0.7 : 1, cursor: checking ? 'not-allowed' : 'pointer' }}
           disabled={checking}>
           {checking ? 'Checking...' : "✓  I've confirmed my email — continue"}
-        </button>
+        </button> */}
 
         {resendError && (
           <div style={{ ...s.msg, background: C.redLight, color: C.red, border: `1px solid ${C.redMid}` }}>
