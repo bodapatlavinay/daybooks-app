@@ -40,6 +40,8 @@ export default function Dashboard({
   const [editingExpense, setEditingExpense]             = useState(null);
   const [editingPartner, setEditingPartner]             = useState(null);
   const [editingService, setEditingService]             = useState(null);
+  const [reportPeriod, setReportPeriod]                 = useState('week');
+  const [entryDraft, setEntryDraft]                     = useState(null);
 
   const equityTotal       = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
   const showEquityWarning = partners.length > 0 && Math.abs(equityTotal - 100) > 0.01;
@@ -58,6 +60,23 @@ export default function Dashboard({
 
   function openDeleteAccount()  { setDeleteAccountInput(''); setConfirmDeleteAccount(true); }
   function closeDeleteAccount() { setConfirmDeleteAccount(false); setDeleteAccountInput(''); }
+  function openReportsFor(period) {
+    setReportPeriod(period);
+    setTab('reports');
+  }
+
+  function duplicateEntry(item) {
+    setEntryDraft({
+      description: item.description || '',
+      amount: String(item.amount || ''),
+      date: item.entry_date || new Date().toISOString().slice(0, 10),
+      serviceType: item.service_type || services[0]?.name || '',
+      paymentType: item.payment_type || 'cash',
+    });
+    setTab('entries');
+    setFilter('all');
+  }
+
   async function doDeleteAccount() {
     if (deleteAccountInput !== 'DELETE') return;
     closeDeleteAccount();
@@ -92,12 +111,13 @@ export default function Dashboard({
         <div style={s.dashPage}>
           <div style={s.periodStrip}>
             {[
-              { label: 'Today',      pd: periodTotals.today },
-              { label: 'This Week',  pd: periodTotals.week  },
-              { label: 'This Month', pd: periodTotals.month },
-            ].map(({ label, pd }) => (
-              <div key={label} style={s.periodCard}>
-                <div style={s.periodTop}>
+              { label: 'Today',      pd: periodTotals.today, period: 'today' },
+              { label: 'This Week',  pd: periodTotals.week,  period: 'week' },
+              { label: 'This Month', pd: periodTotals.month, period: 'month' },
+            ].map(({ label, pd, period }) => (
+              <button key={label} style={s.periodCardBtn} onClick={() => openReportsFor(period)}>
+                <div style={s.periodCard}>
+                  <div style={s.periodTop}>
                   <span style={s.periodLabel}>{label}</span>
                   <span style={{
                     ...s.periodBadge,
@@ -109,17 +129,29 @@ export default function Dashboard({
                   </span>
                 </div>
                 <div style={s.periodIncome}>${pd.income.toFixed(2)}</div>
-                <div style={s.periodBottom}>
-                  <span style={s.periodExpLabel}>Expenses</span>
-                  <span style={s.periodExpVal}>${pd.expense.toFixed(2)}</span>
+                  <div style={s.periodBottom}>
+                    <span style={s.periodExpLabel}>Expenses</span>
+                    <span style={s.periodExpVal}>${pd.expense.toFixed(2)}</span>
+                  </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
           <div style={s.dashGrid}>
             <div style={s.dashLeft}>
               <SummaryCard totalIncome={totals.totalIncome} totalExpense={totals.totalExpense} profit={totals.profit} />
+              <Panel title="Quick Add Income">
+                {services.length === 0
+                  ? <EmptyCard icon="⚙️" text="No services yet" hint="Add services in Settings first." />
+                  : <EntryForm
+                      onAddEntry={onAddEntry}
+                      services={services}
+                      submitting={submitting}
+                      compact
+                      submitLabel="+ Quick Add Income"
+                    />}
+              </Panel>
             </div>
             <div style={s.dashRight}>
               <TableSection title="Recent Income" count={entries.length} accentColor={C.green}>
@@ -132,6 +164,7 @@ export default function Dashboard({
                         onCancelEdit={() => setEditingEntry(null)}
                         onSaveEdit={d => { onEditEntry(item.id, d); setEditingEntry(null); }}
                         onDelete={() => requestDelete('entry', item.id, item.description)}
+                        onDuplicate={() => duplicateEntry(item)}
                         submitting={submitting} />
                     ))}
               </TableSection>
@@ -159,7 +192,7 @@ export default function Dashboard({
           <div style={s.leftCol}>
             {services.length === 0
               ? <Panel title="Record Income"><EmptyCard icon="⚙️" text="No services yet" hint="Add services in Settings first." /></Panel>
-              : <Panel title="Record Income"><EntryForm onAddEntry={onAddEntry} services={services} submitting={submitting} /></Panel>}
+              : <Panel title="Record Income"><EntryForm onAddEntry={onAddEntry} services={services} submitting={submitting} initialValues={entryDraft} onAppliedInitialValues={() => setEntryDraft(null)} /></Panel>}
           </div>
           <div style={s.rightCol}>
             <TableSection title="All Income" count={entries.length} accentColor={C.green}>
@@ -172,6 +205,7 @@ export default function Dashboard({
                       onCancelEdit={() => setEditingEntry(null)}
                       onSaveEdit={d => { onEditEntry(item.id, d); setEditingEntry(null); }}
                       onDelete={() => requestDelete('entry', item.id, item.description)}
+                      onDuplicate={() => duplicateEntry(item)}
                       submitting={submitting} />
                   ))}
             </TableSection>
@@ -230,7 +264,7 @@ export default function Dashboard({
                       submitting={submitting} />
                   ))}
             </TableSection>
-            <SettlementCard partners={partners} expenses={allExpenses} />
+            <SettlementCard partners={partners} expenses={allExpenses} entries={allEntries} />
           </div>
         </div>
       )}
@@ -242,6 +276,7 @@ export default function Dashboard({
           expenses={allExpenses || expenses}
           shopName={shop.name}
           shop={shop}
+          initialPeriod={reportPeriod}
         />
       )}
 
@@ -409,7 +444,7 @@ function TableSection({ title, count, accentColor, children }) {
 // FIX: Each row owns its edit state. When Edit is clicked, state is reset
 // from the current item values. This ensures edits always reflect fresh data.
 
-function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit, onDelete, submitting }) {
+function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit, onDelete, onDuplicate, submitting }) {
   const [desc, setDesc] = useState(item.description);
   const [amt,  setAmt]  = useState(String(item.amount));
   const [date, setDate] = useState(item.entry_date);
@@ -485,13 +520,13 @@ function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit,
       </div>
       <div style={s.rowRight}>
         <span style={{ ...s.rowAmt, color: C.green }}>${Number(item.amount).toFixed(2)}</span>
-        <RowBtns onEdit={handleEdit} onDelete={onDelete} />
+        <RowBtns onEdit={handleEdit} onDelete={onDelete} onDuplicate={onDuplicate} />
       </div>
     </div>
   );
 }
 
-function ExpenseRow({ item, partners, currentUserEmail, isEditing, onEdit, onCancelEdit, onSaveEdit, onDelete, submitting }) {
+function ExpenseRow({ item, partners, currentUserEmail, isEditing, onEdit, onCancelEdit, onSaveEdit, onDelete, onDuplicate, submitting }) {
   const [desc, setDesc] = useState(item.description);
   const [amt,  setAmt]  = useState(String(item.amount));
   const [cat,  setCat]  = useState(item.category || 'misc');
@@ -557,7 +592,7 @@ function ExpenseRow({ item, partners, currentUserEmail, isEditing, onEdit, onCan
       </div>
       <div style={s.rowRight}>
         <span style={{ ...s.rowAmt, color: C.red }}>${Number(item.amount).toFixed(2)}</span>
-        <RowBtns onEdit={handleEdit} onDelete={onDelete} />
+        <RowBtns onEdit={handleEdit} onDelete={onDelete} onDuplicate={onDuplicate} />
       </div>
     </div>
   );
@@ -639,9 +674,10 @@ function ServiceRow({ service, isEditing, onEdit, onCancelEdit, onSaveEdit, onDe
   );
 }
 
-function RowBtns({ onEdit, onDelete, deleteLabel = 'Delete' }) {
+function RowBtns({ onEdit, onDelete, onDuplicate, deleteLabel = 'Delete' }) {
   return (
     <div style={s.rowBtns}>
+      {onDuplicate && <button style={s.duplicateBtn} onClick={onDuplicate}>Duplicate</button>}
       <button style={s.editBtn} onClick={onEdit}>Edit</button>
       <button style={s.deleteBtn} onClick={onDelete}>{deleteLabel}</button>
     </div>
@@ -682,7 +718,8 @@ const s = {
   filterBar: { display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' },
   filterBtn: { padding: '7px 16px', borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontFamily: "'Outfit', sans-serif", transition: 'all 0.12s' },
 
-  periodCard:     { background: C.white, borderRadius: '12px', padding: '20px', border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  periodCardBtn:  { background: 'transparent', border: 'none', padding: 0, margin: 0, cursor: 'pointer', textAlign: 'left', width: '100%' },
+  periodCard:     { background: C.white, borderRadius: '12px', padding: '20px', border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'transform 0.12s, box-shadow 0.12s, border-color 0.12s' },
   periodTop:      { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
   periodLabel:    { fontSize: '12px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' },
   periodBadge:    { fontSize: '12px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' },
@@ -713,6 +750,7 @@ const s = {
   rowBtns:   { display: 'flex', gap: '4px' },
   equityChip:{ fontSize: '12px', fontWeight: '700', color: C.mid, background: C.bg, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` },
   editBtn:   { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.border}`, background: C.white, color: C.mid, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
+  duplicateBtn: { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.greenBorder}`, background: C.greenBg, color: C.greenText, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
   deleteBtn: { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.redMid}`, background: C.redLight, color: C.red, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
 
   editCard:    { padding: '14px 20px', background: '#FAFAF8', borderBottom: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: '12px' },

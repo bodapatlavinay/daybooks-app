@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { C } from './styles';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -337,11 +337,15 @@ const PERIODS = [
   { val: 'custom',    label: '📅 Custom' },
 ];
 
-export default function ReportsCard({ entries: allEntries, expenses: allExpenses, shopName, shop }) {
-  const [period, setPeriod]   = useState('week');
+export default function ReportsCard({ entries: allEntries, expenses: allExpenses, shopName, shop, initialPeriod = 'week' }) {
+  const [period, setPeriod]   = useState(initialPeriod);
   const [customFrom, setFrom] = useState('');
   const [customTo,   setTo]   = useState('');
   const [expandedWeek, setExpandedWeek] = useState(null);
+
+  useEffect(() => {
+    if (initialPeriod) setPeriod(initialPeriod);
+  }, [initialPeriod]);
 
   const range = useMemo(() => getRange(period, customFrom, customTo), [period, customFrom, customTo]);
 
@@ -380,6 +384,27 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
   const weekExpSoFar    = dailyWeek.reduce((s, d) => s + d.expense, 0);
   const weekProfitSoFar = weekIncomeSoFar - weekExpSoFar;
   const vsLastIncome    = lastWeekTots.income > 0 ? ((weekIncomeSoFar - lastWeekTots.income) / lastWeekTots.income * 100) : null;
+
+  const sixMonthTrend = useMemo(() => {
+    const now = new Date();
+    const months = [];
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const start = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - offset + 1, 0, 23, 59, 59, 999);
+      const income = allEntries.filter(e => inRange(e.entry_date, start, end)).reduce((s, e) => s + Number(e.amount || 0), 0);
+      const expense = allExpenses.filter(e => inRange(e.expense_date, start, end)).reduce((s, e) => s + Number(e.amount || 0), 0);
+      months.push({
+        key: `${start.getFullYear()}-${start.getMonth() + 1}`,
+        label: start.toLocaleDateString('en-US', { month: 'short' }),
+        fullLabel: start.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        income, expense, profit: income - expense, isCurrent: offset === 0,
+      });
+    }
+    return months;
+  }, [allEntries, allExpenses]);
+
+  const trendMax = Math.max(...sixMonthTrend.map(m => Math.max(m.income, m.expense, Math.abs(m.profit))), 1);
+  const trendHasData = sixMonthTrend.some(m => m.income > 0 || m.expense > 0);
 
   return (
     <div style={s.wrap}>
@@ -597,6 +622,69 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
           )}
         </div>
       )}
+
+      <div style={s.trendCard}>
+        <div style={s.trendHeader}>
+          <div>
+            <div style={s.trendTitle}>6-Month Trend</div>
+            <div style={s.trendSub}>Always calculated from all recorded data so you can quickly see growth, slowdown, or seasonality.</div>
+          </div>
+          <div style={s.trendLegend}>
+            <div style={s.legendItem}><div style={{ ...s.legendDot, background: C.green }} /><span>Income</span></div>
+            <div style={s.legendItem}><div style={{ ...s.legendDot, background: C.red }} /><span>Expenses</span></div>
+            <div style={s.legendItem}><div style={{ ...s.legendDot, background: C.dark }} /><span>Profit</span></div>
+          </div>
+        </div>
+
+        {trendHasData ? (
+          <div style={s.trendChart}>
+            {sixMonthTrend.map(month => (
+              <div key={month.key} style={s.trendCol}>
+                <div style={s.trendBars}>
+                  <div style={s.trendBarTrack}>
+                    <div style={{ ...s.trendBarFill, height: `${Math.max((month.income / trendMax) * 100, month.income > 0 ? 4 : 0)}%`, background: month.isCurrent ? C.greenText : C.green }} />
+                  </div>
+                  <div style={s.trendBarTrack}>
+                    <div style={{ ...s.trendBarFill, height: `${Math.max((month.expense / trendMax) * 100, month.expense > 0 ? 4 : 0)}%`, background: month.isCurrent ? C.red : '#F87171' }} />
+                  </div>
+                  <div style={s.trendBarTrack}>
+                    <div style={{ ...s.trendBarFill, height: `${Math.max((Math.abs(month.profit) / trendMax) * 100, Math.abs(month.profit) > 0 ? 4 : 0)}%`, background: month.profit >= 0 ? C.dark : '#6B7280' }} />
+                  </div>
+                </div>
+                <div style={{ ...s.trendLabel, fontWeight: month.isCurrent ? '800' : '600', color: month.isCurrent ? C.dark : C.mid }}>{month.label}</div>
+                <div style={{ ...s.trendProfit, color: month.profit >= 0 ? C.greenText : C.red }}>
+                  {month.profit >= 0 ? '+' : '-'}${Math.abs(month.profit).toFixed(0)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={s.trendEmpty}>No all-time data yet for the 6-month trend.</div>
+        )}
+
+        <div style={s.trendTable}>
+          <div style={s.trendTableHead}>
+            <span style={s.trendTH}>Month</span>
+            <span style={s.trendTH}>Income</span>
+            <span style={s.trendTH}>Expenses</span>
+            <span style={s.trendTH}>Profit</span>
+          </div>
+          {sixMonthTrend.map(month => (
+            <div key={`${month.key}-row`} style={{ ...s.trendTableRow, background: month.isCurrent ? C.bg : 'transparent' }}>
+              <span style={s.trendCell}>{month.fullLabel}</span>
+              <span style={{ ...s.trendCell, color: month.income > 0 ? C.greenText : C.faint }}>
+                {month.income > 0 ? `+$${month.income.toFixed(2)}` : '—'}
+              </span>
+              <span style={{ ...s.trendCell, color: month.expense > 0 ? C.red : C.faint }}>
+                {month.expense > 0 ? `-$${month.expense.toFixed(2)}` : '—'}
+              </span>
+              <span style={{ ...s.trendCell, color: month.profit >= 0 ? C.greenText : C.red, fontWeight: '700' }}>
+                {month.income > 0 || month.expense > 0 ? `${month.profit >= 0 ? '+' : '-'}$${Math.abs(month.profit).toFixed(2)}` : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {!hasData ? (
         <div style={s.emptyPage}>
@@ -929,6 +1017,25 @@ const s = {
   summaryLabel:   { fontSize: '13px', color: C.mid },
   summaryVal:     { fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px' },
   summaryDivider: { height: '1px', background: C.border },
+
+  trendCard: { background: C.white, borderRadius: '12px', border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  trendHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', padding: '18px 20px 12px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap' },
+  trendTitle: { fontSize: '15px', fontWeight: '800', color: C.dark },
+  trendSub: { fontSize: '12px', color: C.muted, marginTop: '4px', maxWidth: '560px', lineHeight: '1.6' },
+  trendLegend: { display: 'flex', gap: '14px', flexWrap: 'wrap' },
+  trendChart: { display: 'flex', alignItems: 'flex-end', gap: '10px', padding: '18px 20px 14px', minHeight: '220px' },
+  trendCol: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', minWidth: 0 },
+  trendBars: { height: '150px', width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '4px' },
+  trendBarTrack: { flex: 1, maxWidth: '20px', height: '100%', background: C.bg, borderRadius: '8px 8px 3px 3px', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' },
+  trendBarFill: { width: '100%', minHeight: '0', borderRadius: '8px 8px 0 0', transition: 'height 0.25s' },
+  trendLabel: { fontSize: '12px' },
+  trendProfit: { fontSize: '11px' },
+  trendTable: { borderTop: `1px solid ${C.border}` },
+  trendTableHead: { display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr 1fr', gap: '6px', padding: '10px 20px', background: C.bg },
+  trendTH: { fontSize: '10px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  trendTableRow: { display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr 1fr', gap: '6px', padding: '10px 20px', borderTop: `1px solid ${C.border}` },
+  trendCell: { fontSize: '13px', color: C.dark },
+  trendEmpty: { padding: '20px', fontSize: '13px', color: C.muted },
 
   emptyPage:  { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center', background: C.white, borderRadius: '12px', border: `1px solid ${C.border}` },
   emptyIcon:  { fontSize: '40px', marginBottom: '16px' },
