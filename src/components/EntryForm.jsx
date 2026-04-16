@@ -66,7 +66,7 @@ export default function EntryForm({
     setServiceType(normalizedInitial.serviceType);
     setPaymentType(normalizedInitial.paymentType);
     onAppliedInitialValues?.();
-  }, [normalizedInitial, initialValues, services, onAppliedInitialValues]);
+  }, [normalizedInitial, initialValues, services, serviceType, onAppliedInitialValues]);
 
   function resetForm() {
     setDescription('');
@@ -88,41 +88,86 @@ export default function EntryForm({
     <form onSubmit={handleSubmit} style={{ ...s.form, gap: compact ? '10px' : '12px' }}>
       {compact ? (
         <div style={s.row2}>
-          <Field label="Service type" id="ef-svc">
-            <select id="ef-svc" name="ef-svc" value={serviceType}
-              onChange={e => setServiceType(e.target.value)} style={s.input}>
+          <Field label="Service type" id="ef-svc-compact">
+            <select
+              id="ef-svc-compact"
+              name="ef-svc-compact"
+              value={serviceType}
+              onChange={e => setServiceType(e.target.value)}
+              style={s.input}
+            >
               {services.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}
             </select>
           </Field>
-          <Field label="Amount ($)" id="ef-amt">
-            <input id="ef-amt" name="ef-amt" type="number" placeholder="0.00"
-              value={amount} onChange={e => setAmount(e.target.value)}
-              style={s.input} min="0.01" step="0.01" autoComplete="off" required />
+          <Field label="Amount ($)" id="ef-amt-compact">
+            <input
+              id="ef-amt-compact"
+              name="ef-amt-compact"
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              style={s.input}
+              min="0.01"
+              step="0.01"
+              autoComplete="off"
+              required
+            />
           </Field>
         </div>
       ) : (
         <>
           <Field label="Service type" id="ef-svc">
-            <select id="ef-svc" name="ef-svc" value={serviceType}
-              onChange={e => setServiceType(e.target.value)} style={s.input}>
+            <select
+              id="ef-svc"
+              name="ef-svc"
+              value={serviceType}
+              onChange={e => setServiceType(e.target.value)}
+              style={s.input}
+            >
               {services.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}
             </select>
           </Field>
+
           <Field label="Description" id="ef-desc">
-            <input id="ef-desc" name="ef-desc" type="text"
+            <input
+              id="ef-desc"
+              name="ef-desc"
+              type="text"
               placeholder="e.g. 2 tires fitted for Honda"
-              value={description} onChange={e => setDescription(e.target.value)}
-              style={s.input} autoComplete="off" required />
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              style={s.input}
+              autoComplete="off"
+              required
+            />
           </Field>
+
           <div style={s.row2}>
             <Field label="Amount ($)" id="ef-amt">
-              <input id="ef-amt" name="ef-amt" type="number" placeholder="0.00"
-                value={amount} onChange={e => setAmount(e.target.value)}
-                style={s.input} min="0.01" step="0.01" autoComplete="off" required />
+              <input
+                id="ef-amt"
+                name="ef-amt"
+                type="number"
+                placeholder="0.00"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                style={s.input}
+                min="0.01"
+                step="0.01"
+                autoComplete="off"
+                required
+              />
             </Field>
             <Field label="Date" id="ef-date">
-              <input id="ef-date" name="ef-date" type="date" value={date}
-                onChange={e => setDate(e.target.value)} style={s.input} />
+              <input
+                id="ef-date"
+                name="ef-date"
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                style={s.input}
+              />
             </Field>
           </div>
         </>
@@ -131,24 +176,39 @@ export default function EntryForm({
       {compact && (
         <div style={s.row2}>
           <Field label="Date" id="ef-date-compact">
-            <input id="ef-date-compact" name="ef-date-compact" type="date" value={date}
-              onChange={e => setDate(e.target.value)} style={s.input} />
+            <input
+              id="ef-date-compact"
+              name="ef-date-compact"
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              style={s.input}
+            />
           </Field>
           <Field label="Description (optional)" id="ef-desc-compact">
-            <input id="ef-desc-compact" name="ef-desc-compact" type="text"
+            <input
+              id="ef-desc-compact"
+              name="ef-desc-compact"
+              type="text"
               placeholder="Optional note"
-              value={description} onChange={e => setDescription(e.target.value)}
-              style={s.input} autoComplete="off" />
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              style={s.input}
+              autoComplete="off"
+            />
           </Field>
         </div>
       )}
 
-      <Field label="Payment method" id="ef-payment">
-        <div style={s.pills}>
+      <div style={s.field}>
+        <div style={s.label}>Payment method</div>
+        <div style={s.pills} role="group" aria-label="Payment method">
           {PAYMENT_TYPES.map(p => {
             const active = paymentType === p.value;
             return (
-              <button key={p.value} type="button"
+              <button
+                key={p.value}
+                type="button"
                 onClick={() => setPaymentType(p.value)}
                 style={{
                   ...s.pill,
@@ -156,17 +216,21 @@ export default function EntryForm({
                   color: active ? p.color : C.muted,
                   border: `1.5px solid ${active ? p.border : C.border}`,
                   fontWeight: active ? '700' : '500',
-                }}>
+                }}
+                aria-pressed={active}
+              >
                 {p.label}
               </button>
             );
           })}
         </div>
-      </Field>
+      </div>
 
-      <button type="submit"
+      <button
+        type="submit"
         style={{ ...s.btn, opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }}
-        disabled={submitting}>
+        disabled={submitting}
+      >
         {submitting ? 'Saving...' : (submitLabel || (compact ? '+ Quick Add Income' : '+ Add Income'))}
       </button>
     </form>
