@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Layout from './Layout';
 import SummaryCard from './SummaryCard';
 import EntryForm from './EntryForm';
@@ -42,6 +42,13 @@ export default function Dashboard({
   const [editingService, setEditingService]             = useState(null);
   const [reportPeriod, setReportPeriod]                 = useState('week');
   const [entryDraft, setEntryDraft]                     = useState(null);
+  const [isMobileView, setIsMobileView]               = useState(typeof window !== 'undefined' ? window.innerWidth < 900 : false);
+
+  useEffect(() => {
+    const onResize = () => setIsMobileView(window.innerWidth < 900);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const equityTotal       = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
   const showEquityWarning = partners.length > 0 && Math.abs(equityTotal - 100) > 0.01;
@@ -138,7 +145,7 @@ export default function Dashboard({
             ))}
           </div>
 
-          <div style={s.dashGrid}>
+          <div style={{ ...s.dashGrid, gridTemplateColumns: isMobileView ? '1fr' : s.dashGrid.gridTemplateColumns }}>
             <div style={s.dashLeft}>
               <SummaryCard totalIncome={totals.totalIncome} totalExpense={totals.totalExpense} profit={totals.profit} />
               <Panel title="Quick Add Income">
@@ -188,7 +195,7 @@ export default function Dashboard({
 
       {/* ── INCOME ── */}
       {tab === 'entries' && (
-        <div style={s.twoCol}>
+        <div style={{ ...s.twoCol, gridTemplateColumns: isMobileView ? '1fr' : s.twoCol.gridTemplateColumns }}>
           <div style={s.leftCol}>
             {services.length === 0
               ? <Panel title="Record Income"><EmptyCard icon="⚙️" text="No services yet" hint="Add services in Settings first." /></Panel>
@@ -215,7 +222,7 @@ export default function Dashboard({
 
       {/* ── EXPENSES ── */}
       {tab === 'expenses' && (
-        <div style={s.twoCol}>
+        <div style={{ ...s.twoCol, gridTemplateColumns: isMobileView ? '1fr' : s.twoCol.gridTemplateColumns }}>
           <div style={s.leftCol}>
             <Panel title="Log Expense">
               <ExpenseForm onAddExpense={onAddExpense} partners={partners} currentUserEmail={user.email} submitting={submitting} />
@@ -241,7 +248,7 @@ export default function Dashboard({
 
       {/* ── PARTNERS ── */}
       {tab === 'partners' && (
-        <div style={s.twoCol}>
+        <div style={{ ...s.twoCol, gridTemplateColumns: isMobileView ? '1fr' : s.twoCol.gridTemplateColumns }}>
           <div style={s.leftCol}>
             <Panel title="Add Partner">
               <PartnersForm onAddPartner={onAddPartner} submitting={submitting} />
@@ -282,7 +289,7 @@ export default function Dashboard({
 
       {/* ── SETTINGS ── */}
       {tab === 'settings' && (
-        <div style={s.twoCol}>
+        <div style={{ ...s.twoCol, gridTemplateColumns: isMobileView ? '1fr' : s.twoCol.gridTemplateColumns }}>
           <div style={s.leftCol}>
             <Panel title="Shop Settings">
               <SettingsForm shop={shop} onSaveShop={onSaveShop} submitting={submitting} />
