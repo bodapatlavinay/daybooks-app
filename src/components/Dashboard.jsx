@@ -42,6 +42,9 @@ export default function Dashboard({
   const [editingService, setEditingService]             = useState(null);
   const [reportPeriod, setReportPeriod]                 = useState('week');
   const [entryDraft, setEntryDraft]                     = useState(null);
+  const [entryServiceFilter, setEntryServiceFilter]     = useState('all');
+  const [entryPayFilter, setEntryPayFilter]             = useState('all');
+  const [fabSheet, setFabSheet]                         = useState(null);
   const [isMobileView, setIsMobileView]               = useState(typeof window !== 'undefined' ? window.innerWidth < 900 : false);
 
   useEffect(() => {
@@ -52,6 +55,38 @@ export default function Dashboard({
 
   const equityTotal       = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
   const showEquityWarning = partners.length > 0 && Math.abs(equityTotal - 100) > 0.01;
+  // ── Streak: consecutive days with income, ending today or yesterday ────────
+  const streak = (() => {
+    if (!allEntries.length) return 0;
+    const dateSet = {};
+    allEntries.forEach(e => { if (e.entry_date) dateSet[e.entry_date] = true; });
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayStr = today.toISOString().slice(0,10);
+    const yest = new Date(today); yest.setDate(today.getDate()-1);
+    const yestStr = yest.toISOString().slice(0,10);
+    if (!dateSet[todayStr] && !dateSet[yestStr]) return 0;
+    let cursor = new Date(dateSet[todayStr] ? today : yest);
+    let count = 0;
+    while (true) {
+      const key = cursor.toISOString().slice(0,10);
+      if (!dateSet[key]) break;
+      count++;
+      cursor.setDate(cursor.getDate()-1);
+    }
+    return count;
+  })();
+
+  // ── Best day ever ─────────────────────────────────────────────────────────
+  const bestDay = (() => {
+    if (!allEntries.length) return null;
+    const byDate = {};
+    allEntries.forEach(e => { if (e.entry_date) byDate[e.entry_date] = (byDate[e.entry_date]||0) + Number(e.amount||0); });
+    const sorted = Object.entries(byDate).sort((a,b) => b[1]-a[1]);
+    if (!sorted.length) return null;
+    return { date: sorted[0][0], amt: sorted[0][1] };
+  })();
+
+
 
   function requestDelete(type, id, label) { setConfirmDelete({ type, id, label }); }
   function cancelDelete() { setConfirmDelete(null); }
@@ -72,6 +107,8 @@ export default function Dashboard({
     setTab('reports');
   }
 
+  function handleQuickAdd(tabName) { setFabSheet(tabName); }
+
   function duplicateEntry(item) {
     setEntryDraft({
       description: item.description || '',
@@ -91,7 +128,7 @@ export default function Dashboard({
   }
 
   return (
-    <Layout shop={shop} user={user} currentTab={tab} setCurrentTab={setTab} onLogout={onLogout}>
+    <Layout shop={shop} user={user} currentTab={tab} setCurrentTab={setTab} onLogout={onLogout} onQuickAdd={handleQuickAdd}>
 
       {/* Filter bar */}
       {TABS_WITH_FILTER.includes(tab) && (
@@ -144,6 +181,29 @@ export default function Dashboard({
               </button>
             ))}
           </div>
+
+          {(streak > 0 || bestDay) && (
+            <div style={s.insightStrip}>
+              {streak > 0 && (
+                <div style={s.insightChip}>
+                  <span style={{ fontSize: '20px' }}>🔥</span>
+                  <div>
+                    <div style={s.insightVal}>{streak}-day streak</div>
+                    <div style={s.insightSub}>Consecutive days with income</div>
+                  </div>
+                </div>
+              )}
+              {bestDay && (
+                <div style={s.insightChip}>
+                  <span style={{ fontSize: '20px' }}>⭐</span>
+                  <div>
+                    <div style={s.insightVal}>Best day: ${bestDay.amt.toFixed(2)}</div>
+                    <div style={s.insightSub}>{bestDay.date}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ ...s.dashGrid, gridTemplateColumns: isMobileView ? '1fr' : s.dashGrid.gridTemplateColumns }}>
             <div style={s.dashLeft}>
@@ -202,20 +262,41 @@ export default function Dashboard({
               : <Panel title="Record Income"><EntryForm onAddEntry={onAddEntry} services={services} submitting={submitting} initialValues={entryDraft} onAppliedInitialValues={() => setEntryDraft(null)} /></Panel>}
           </div>
           <div style={s.rightCol}>
-            <TableSection title="All Income" count={entries.length} accentColor={C.green}>
-              {entries.length === 0
-                ? <EmptyRow text="No entries for this period" hint="Add your first income entry." />
-                : entries.map(item => (
-                    <EntryRow key={item.id} item={item} services={services}
-                      isEditing={editingEntry === item.id}
-                      onEdit={() => setEditingEntry(item.id)}
-                      onCancelEdit={() => setEditingEntry(null)}
-                      onSaveEdit={d => { onEditEntry(item.id, d); setEditingEntry(null); }}
-                      onDelete={() => requestDelete('entry', item.id, item.description)}
-                      onDuplicate={() => duplicateEntry(item)}
-                      submitting={submitting} />
-                  ))}
-            </TableSection>
+            <div style={s.entryFilterBar}>
+              <select value={entryServiceFilter} onChange={e => setEntryServiceFilter(e.target.value)} style={s.entryFilterSelect}>
+                <option value="all">All services</option>
+                {services.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}
+              </select>
+              <select value={entryPayFilter} onChange={e => setEntryPayFilter(e.target.value)} style={s.entryFilterSelect}>
+                <option value="all">All payment types</option>
+                {PAYMENT_TYPES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              {(entryServiceFilter !== 'all' || entryPayFilter !== 'all') && (
+                <button onClick={() => { setEntryServiceFilter('all'); setEntryPayFilter('all'); }} style={s.entryFilterClear}>Clear</button>
+              )}
+            </div>
+            {(() => {
+              const filtered = entries.filter(item =>
+                (entryServiceFilter === 'all' || item.service_type === entryServiceFilter) &&
+                (entryPayFilter === 'all' || (item.payment_type || 'cash') === entryPayFilter)
+              );
+              return (
+                <TableSection title="All Income" count={filtered.length} accentColor={C.green}>
+                  {filtered.length === 0
+                    ? <EmptyRow text="No entries match this filter" hint="Try changing the filter above." />
+                    : filtered.map(item => (
+                        <EntryRow key={item.id} item={item} services={services}
+                          isEditing={editingEntry === item.id}
+                          onEdit={() => setEditingEntry(item.id)}
+                          onCancelEdit={() => setEditingEntry(null)}
+                          onSaveEdit={d => { onEditEntry(item.id, d); setEditingEntry(null); }}
+                          onDelete={() => requestDelete('entry', item.id, item.description)}
+                          onDuplicate={() => duplicateEntry(item)}
+                          submitting={submitting} />
+                      ))}
+                </TableSection>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -416,6 +497,22 @@ export default function Dashboard({
                 {submitting ? 'Deleting...' : 'Delete account'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {fabSheet && (
+        <div style={s.overlay} onClick={() => setFabSheet(null)}>
+          <div style={s.fabSheet} onClick={e => e.stopPropagation()}>
+            <div style={s.fabSheetHandle} />
+            <div style={s.fabSheetTitle}>{fabSheet === 'entries' ? 'Quick Add Income' : 'Add Expense'}</div>
+            {fabSheet === 'entries' && (
+              services.length === 0
+                ? <EmptyCard icon="⚙️" text="No services yet" hint="Add services in Settings first." />
+                : <EntryForm onAddEntry={(d) => { onAddEntry(d); setFabSheet(null); }} services={services} submitting={submitting} compact submitLabel="+ Add Income" />
+            )}
+            {fabSheet === 'expenses' && (
+              <ExpenseForm onAddExpense={(d) => { onAddExpense(d); setFabSheet(null); }} partners={partners} currentUserEmail={user.email} submitting={submitting} />
+            )}
           </div>
         </div>
       )}
@@ -796,6 +893,16 @@ const s = {
   deleteAccountLabel: { fontSize: '13px', color: C.mid },
   deleteAccountInput: { padding: '11px 14px', borderRadius: '9px', border: `1.5px solid ${C.border}`, fontSize: '14px', background: C.surface, outline: 'none', color: C.dark, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box', letterSpacing: '2px', fontWeight: '700' },
 
+  insightStrip: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  insightChip:  { display: 'flex', alignItems: 'center', gap: '10px', background: C.white, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '10px 14px', flex: 1, minWidth: '160px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  insightVal:   { fontSize: '14px', fontWeight: '800', color: C.dark, letterSpacing: '-0.2px' },
+  insightSub:   { fontSize: '11px', color: C.muted, marginTop: '2px' },
+  entryFilterBar:    { display: 'flex', gap: '8px', padding: '12px 20px', background: C.bg, borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', alignItems: 'center' },
+  entryFilterSelect: { padding: '7px 12px', borderRadius: '7px', border: `1px solid ${C.border}`, fontSize: '12px', background: C.white, outline: 'none', color: C.dark, fontFamily: "'Outfit', sans-serif", cursor: 'pointer' },
+  entryFilterClear:  { padding: '6px 12px', borderRadius: '7px', border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: '12px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" },
+  fabSheet:     { position: 'absolute', bottom: 0, left: 0, right: 0, background: C.white, borderRadius: '20px 20px 0 0', padding: '12px 20px 40px', display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '85vh', overflowY: 'auto' },
+  fabSheetHandle: { width: '36px', height: '4px', background: C.border, borderRadius: '2px', margin: '0 auto' },
+  fabSheetTitle:  { fontSize: '16px', fontWeight: '800', color: C.dark, letterSpacing: '-0.2px' },
   toast: { position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: "'Outfit', sans-serif", zIndex: 9999, whiteSpace: 'nowrap', boxShadow: '0 8px 32px rgba(0,0,0,0.24)' },
 
   overlay:        { position: 'fixed', inset: 0, background: 'rgba(10,10,10,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },

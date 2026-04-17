@@ -10,7 +10,7 @@ const NAV = [
   { id: 'settings',  label: 'Settings',   Icon: IconSettings },
 ];
 
-export default function Layout({ shop, user, currentTab, setCurrentTab, onLogout, children }) {
+export default function Layout({ shop, user, currentTab, setCurrentTab, onLogout, onQuickAdd, children }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function Layout({ shop, user, currentTab, setCurrentTab, onLogout
   }, []);
 
   return isMobile
-    ? <Mobile currentTab={currentTab} setCurrentTab={setCurrentTab} shop={shop} user={user} children={children} />
+    ? <Mobile currentTab={currentTab} setCurrentTab={setCurrentTab} shop={shop} user={user} onQuickAdd={onQuickAdd} children={children} />
     : <Desktop currentTab={currentTab} setCurrentTab={setCurrentTab} shop={shop} user={user} onLogout={onLogout} children={children} />;
 }
 
@@ -125,7 +125,7 @@ function Desktop({ currentTab, setCurrentTab, shop, user, onLogout, children }) 
 
 // ── Mobile ────────────────────────────────────────────────────────────────────
 
-function Mobile({ currentTab, setCurrentTab, shop, children }) {
+function Mobile({ currentTab, setCurrentTab, shop, onQuickAdd, children }) {
   return (
     <div style={m.shell}>
       {/* Header */}
@@ -145,6 +145,15 @@ function Mobile({ currentTab, setCurrentTab, shop, children }) {
 
       {/* Scrollable content */}
       <div style={m.content}>{children}</div>
+
+      {/* FAB — Income and Expenses tabs only */}
+      {(currentTab === 'entries' || currentTab === 'expenses') && onQuickAdd && (
+        <button onClick={() => onQuickAdd(currentTab)} style={m.fab} aria-label="Quick add">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      )}
 
       {/* Bottom nav */}
       <nav style={m.tabBar}>
@@ -270,7 +279,7 @@ const d = {
 // ── Mobile styles ──────────────────────────────────────────────────────────────
 
 const m = {
-  shell: { display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: "'Outfit', system-ui, sans-serif" },
+  shell: { display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: "'Outfit', system-ui, sans-serif", position: 'relative' },
   header: {
     background: C.white, borderBottom: `1px solid ${C.border}`,
     padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
@@ -296,6 +305,7 @@ const m = {
   },
   tabLabel: { fontSize: '10px', letterSpacing: '0.1px' },
   activeBar: { position: 'absolute', top: 0, left: '25%', right: '25%', height: '2px', background: C.red, borderRadius: '0 0 2px 2px' },
+  fab:       { position: 'absolute', bottom: '72px', right: '18px', width: '52px', height: '52px', borderRadius: '50%', background: C.red, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 50 },
 };
 
 // ── Icons (inline SVG, no dependency) ─────────────────────────────────────────

@@ -1,4 +1,4 @@
-    import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
     import { C } from './styles';
 
     // ── Shared ────────────────────────────────────────────────────────────────────
@@ -115,10 +115,20 @@
     'Car Wash', 'Battery Shop', 'Brake & Exhaust', 'Other Auto',
     ];
 
+    export const CURRENCIES = [
+    { value: 'USD', symbol: '$',   label: 'USD ($) — US Dollar' },
+    { value: 'INR', symbol: '₹',   label: 'INR (₹) — Indian Rupee' },
+    { value: 'GBP', symbol: '£',   label: 'GBP (£) — British Pound' },
+    { value: 'EUR', symbol: '€',   label: 'EUR (€) — Euro' },
+    { value: 'AED', symbol: 'د.إ', label: 'AED (د.إ) — UAE Dirham' },
+    { value: 'MXN', symbol: '$',   label: 'MXN ($) — Mexican Peso' },
+    ];
+
     export function SettingsForm({ shop, onSaveShop, submitting }) {
     const [name, setName]         = useState(shop?.name || '');
     const [category, setCategory] = useState(shop?.category || '');
     const [location, setLocation] = useState(shop?.location || '');
+    const [currency, setCurrency] = useState(shop?.currency || 'USD');
 
     // FIX 1: Was incorrectly using useState instead of useEffect.
     // This means fields were always empty when navigating to Settings.
@@ -126,11 +136,12 @@
         setName(shop?.name || '');
         setCategory(shop?.category || '');
         setLocation(shop?.location || '');
+        setCurrency(shop?.currency || 'USD');
     }, [shop]);
 
     function handleSubmit(e) {
         e.preventDefault();
-        onSaveShop({ name, category, location });
+        onSaveShop({ name, category, location, currency });
     }
 
     return (
@@ -164,6 +175,12 @@
             />
             </Field>
         </div>
+
+        <Field label="Currency" id="sf-currency">
+            <select id="sf-currency" name="sf-currency" value={currency} onChange={e => setCurrency(e.target.value)} style={s.input}>
+            {CURRENCIES.map(cur => <option key={cur.value} value={cur.value}>{cur.label}</option>)}
+            </select>
+        </Field>
 
         <button
             type="submit"

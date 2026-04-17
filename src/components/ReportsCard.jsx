@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { C } from './styles';
+import { PAYMENT_TYPES, paymentLabel, paymentStyle } from './EntryForm';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -367,6 +368,17 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
   const expCat = expenses.reduce((a, i) => { const k = i.category || 'misc'; a[k] = (a[k]||0) + Number(i.amount||0); return a; }, {});
   const totalSvcRev = Object.values(svcRev).reduce((s,v)=>s+v,0);
   const totalExpAmt = Object.values(expCat).reduce((s,v)=>s+v,0);
+  // Payment breakdown
+  const payRev  = entries.reduce((a,i) => { const k=i.payment_type||'cash'; a[k]=(a[k]||0)+Number(i.amount||0); return a; }, {});
+  const payCnt  = entries.reduce((a,i) => { const k=i.payment_type||'cash'; a[k]=(a[k]||0)+1; return a; }, {});
+  const totalPay = Object.values(payRev).reduce((s,v)=>s+v,0);
+  // Profit margin %
+  const margin = totalIncome > 0 ? ((totalIncome-totalExpense)/totalIncome*100) : null;
+  // Best / worst day
+  const dayMap = entries.reduce((a,i) => { if(i.entry_date) a[i.entry_date]=(a[i.entry_date]||0)+Number(i.amount||0); return a; }, {});
+  const dayList = Object.entries(dayMap).sort((a,b)=>b[1]-a[1]);
+  const bestDay = dayList[0] || null;
+  const worstDay = dayList.length > 1 ? dayList[dayList.length-1] : null;
 
   const name = shopName || shop?.name || 'Shop';
 
@@ -701,6 +713,7 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
               { label: 'Total Expenses', value: `$${totalExpense.toFixed(2)}`, color: C.red,    accent: C.red },
               { label: 'Net Profit',     value: `${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`, color: profit >= 0 ? C.green : C.red, accent: '#1A1A1A' },
               { label: 'Transactions',   value: `${entries.length + expenses.length}`, color: '#1A1A1A', accent: '#7C3AED' },
+              ...(margin !== null ? [{ label: 'Profit Margin', value: `${margin >= 0 ? '' : '-'}${Math.abs(margin).toFixed(1)}%`, color: margin >= 0 ? C.green : C.red, accent: margin >= 0 ? C.green : C.red }] : []),
             ].map(({ label, value, color, accent }) => (
               <div key={label} style={s.metric}>
                 <div style={{ ...s.metricBar, background: accent }} />
@@ -773,6 +786,7 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
                                 <div key={item.id} style={s.weekDetailRow}>
                                   <div style={s.weekDetailLeft}>
                                     <span style={s.rowTag}>{item.service_type || 'General'}</span>
+                                    {(() => { const ps=paymentStyle(item.payment_type||'cash'); return <span style={{ fontSize:'10px', fontWeight:'600', padding:'1px 6px', borderRadius:'4px', flexShrink:0, background:ps.bg, color:ps.color, border:`1px solid ${ps.border}` }}>{paymentLabel(item.payment_type||'cash')}</span>; })()}
                                     <span style={s.weekDetailDesc}>{item.description}</span>
                                   </div>
                                   <div style={s.weekDetailRight}>
@@ -846,6 +860,52 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
             </div>
           </div>
 
+          {/* ── Payment method breakdown ── */}
+          {Object.keys(payRev).length > 0 && (
+            <div style={s.breakdown}>
+              <div style={s.breakdownTitle}>Income by Payment Method</div>
+              {Object.entries(payRev).sort((a,b)=>b[1]-a[1]).map(([method, rev]) => {
+                const ps = paymentStyle(method);
+                return (
+                  <div key={method} style={s.barRow}>
+                    <div style={s.barLeft}>
+                      <span style={{ ...s.barName, color: ps.color }}>{paymentLabel(method)}</span>
+                      <span style={s.barCount}>{payCnt[method]} txn{payCnt[method]!==1?'s':''}</span>
+                    </div>
+                    <div style={s.barTrack}>
+                      <div style={{ ...s.barFill, width: `${totalPay>0?(rev/totalPay)*100:0}%`, background: ps.color }} />
+                    </div>
+                    <span style={{ ...s.barAmt, color: ps.color }}>${rev.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Best / worst day ── */}
+          {dayList.length > 0 && (
+            <div style={{ display:'flex', gap:'12px', flexWrap:'wrap' }}>
+              {bestDay && (
+                <div style={{ ...s.breakdown, flex:1, minWidth:'180px', flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:'12px' }}>
+                  <div>
+                    <div style={s.breakdownTitle}>Best day this period</div>
+                    <div style={{ fontSize:'12px', color:C.mid, marginTop:'5px' }}>{bestDay[0]}</div>
+                  </div>
+                  <div style={{ fontSize:'18px', fontWeight:'900', color:C.green, letterSpacing:'-0.4px', flexShrink:0 }}>+${bestDay[1].toFixed(2)}</div>
+                </div>
+              )}
+              {worstDay && (
+                <div style={{ ...s.breakdown, flex:1, minWidth:'180px', flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:'12px' }}>
+                  <div>
+                    <div style={s.breakdownTitle}>Lowest day this period</div>
+                    <div style={{ fontSize:'12px', color:C.mid, marginTop:'5px' }}>{worstDay[0]}</div>
+                  </div>
+                  <div style={{ fontSize:'18px', fontWeight:'900', color:C.muted, letterSpacing:'-0.4px', flexShrink:0 }}>${worstDay[1].toFixed(2)}</div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Full income table ── */}
           <div style={s.table}>
             <div style={s.tableHead}>
@@ -858,6 +918,7 @@ export default function ReportsCard({ entries: allEntries, expenses: allExpenses
                   <div key={item.id} style={s.tableRow}>
                     <div style={s.rowLeft}>
                       <span style={s.rowTag}>{item.service_type || 'General'}</span>
+                      {(() => { const ps=paymentStyle(item.payment_type||'cash'); return <span style={{ fontSize:'11px', fontWeight:'600', padding:'2px 7px', borderRadius:'4px', flexShrink:0, background:ps.bg, color:ps.color, border:`1px solid ${ps.border}` }}>{paymentLabel(item.payment_type||'cash')}</span>; })()}
                       <span style={s.rowDesc}>{item.description}</span>
                     </div>
                     <div style={s.rowRight}>

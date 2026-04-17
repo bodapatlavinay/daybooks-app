@@ -50,16 +50,18 @@ function DayBooksApp() {
   }, []);
 
   async function checkUser() {
-    const { user, error } = await getCurrentUser();
-    if (error) {
+    try {
+      const { user, error } = await getCurrentUser();
+      if (error) { setAuthChecked(true); return; }
+      setUser(user);
       setAuthChecked(true);
-      return;
-    }
-    setUser(user);
-    setAuthChecked(true);
-    // Only load shop if email is confirmed — unconfirmed users go to VerifyEmail
-    if (user && user.email_confirmed_at) {
-      await loadShop(user.id);
+      if (user && user.email_confirmed_at) {
+        await loadShop(user.id);
+      }
+    } catch {
+      // Safety net — never leave the app stuck on loading screen
+      setAuthChecked(true);
+      setLoadingShop(false);
     }
   }
 
@@ -78,17 +80,22 @@ function DayBooksApp() {
 
   async function loadShop(userId) {
     setLoadingShop(true);
-    const { data, error } = await supabase
-      .from('shops').select('*').eq('owner_user_id', userId).maybeSingle();
-    if (error) { showMessage(error.message, 'error'); setLoadingShop(false); return; }
-    setShop(data || null);
-    if (data) {
-      await Promise.all([
-        loadEntries(data.id), loadExpenses(data.id),
-        loadPartners(data.id), loadServices(data.id),
-      ]);
+    try {
+      const { data, error } = await supabase
+        .from('shops').select('*').eq('owner_user_id', userId).maybeSingle();
+      if (error) { showMessage(error.message, 'error'); setLoadingShop(false); return; }
+      setShop(data || null);
+      if (data) {
+        await Promise.all([
+          loadEntries(data.id), loadExpenses(data.id),
+          loadPartners(data.id), loadServices(data.id),
+        ]);
+      }
+    } catch (err) {
+      showMessage('Failed to load shop data. Please refresh.', 'error');
+    } finally {
+      setLoadingShop(false);
     }
-    setLoadingShop(false);
   }
 
   async function loadEntries(shopId) {
@@ -224,7 +231,7 @@ function DayBooksApp() {
     setMessage('');
     setSubmitting(true);
     const { data, error } = await supabase.from('shops')
-      .update({ name: updatedShop.name, category: updatedShop.category, location: updatedShop.location })
+      .update({ name: updatedShop.name, category: updatedShop.category, location: updatedShop.location, currency: updatedShop.currency || 'USD' })
       .eq('id', shop.id).select().single();
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
     setShop(data);
