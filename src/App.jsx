@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { signUp, signIn, signOut, getCurrentUser } from './auth';
 import { supabase } from './supabase';
-import LoginForm from './components/LoginForm';
-import ShopSetup from './components/ShopSetup';
-import Dashboard from './components/Dashboard';
-import VerifyEmail from './components/VerifyEmail';
-import LandingPage from './components/LandingPage';
+import LoginForm    from './components/LoginForm';
+import ShopSetup    from './components/ShopSetup';
+import Dashboard    from './components/Dashboard';
+import StaffDashboard from './components/StaffDashboard';
+import ShiftLogin   from './components/ShiftLogin';
+import VerifyEmail  from './components/VerifyEmail';
+import LandingPage  from './components/LandingPage';
 
 export default function App() {
   return (
@@ -17,15 +19,29 @@ export default function App() {
   );
 }
 
+// Special sentinel — owner bypasses shift login to access full dashboard
+const OWNER_SENTINEL = { id: '__owner__', role: 'manager', name: 'Owner', display_id: '00' };
+
 function DayBooksApp() {
   const [mode, setMode]               = useState('login');
   const [user, setUser]               = useState(null);
-  const [authChecked, setAuthChecked] = useState(false); // true once we know login state
+  const [authChecked, setAuthChecked] = useState(false);
   const [message, setMessage]         = useState('');
   const [messageType, setMessageType] = useState('success');
   const [shop, setShop]               = useState(null);
   const [loadingShop, setLoadingShop] = useState(false);
   const [submitting, setSubmitting]   = useState(false);
+
+  // Password recovery
+  const [resetMode, setResetMode]         = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirm, setResetConfirm]   = useState('');
+  const [resetError, setResetError]       = useState('');
+  const [resetDone, setResetDone]         = useState(false);
+
+  // Shift / PIN system
+  const [staffList, setStaffList]       = useState([]);   // all shop_staff rows
+  const [activeShift, setActiveShift]   = useState(null); // the staff member on shift, or null = show ShiftLogin
 
   const [entries, setEntries]   = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -39,14 +55,20 @@ function DayBooksApp() {
     return () => clearTimeout(t);
   }, [message]);
 
-  function showMessage(text, type = 'success') {
-    setMessage(text);
-    setMessageType(type);
-  }
+  function showMessage(text, type = 'success') { setMessage(text); setMessageType(type); }
 
-  // ── Check session on mount ────────────────────────────────────────────────
   useEffect(() => {
     checkUser();
+    // Listen for password recovery event from email link click
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setResetMode(true);
+        setUser(session?.user ?? null);
+        setAuthChecked(true);
+        setLoadingShop(false);
+      }
+    });
+    return () => subscription?.unsubscribe();
   }, []);
 
   async function checkUser() {
@@ -55,65 +77,48 @@ function DayBooksApp() {
       if (error) { setAuthChecked(true); return; }
       setUser(user);
       setAuthChecked(true);
-      if (user && user.email_confirmed_at) {
-        await loadShop(user.id);
-      }
+      if (user && user.email_confirmed_at) await loadShop(user.id);
     } catch {
-      // Safety net — never leave the app stuck on loading screen
       setAuthChecked(true);
       setLoadingShop(false);
     }
   }
 
-  // Called by VerifyEmail component after confirmation is detected
-  // Fetches fresh user object which now has email_confirmed_at set
   async function handleEmailConfirmed() {
     const { user: freshUser } = await getCurrentUser();
-    if (freshUser) {
-      setUser(freshUser);
-      // email_confirmed_at is now set → ShopSetup will render
-      // No need to loadShop here — they have no shop yet (just confirmed)
-    }
+    if (freshUser) setUser(freshUser);
   }
-
-  // ── Data loaders ──────────────────────────────────────────────────────────
 
   async function loadShop(userId) {
     setLoadingShop(true);
     try {
       const { data, error } = await supabase
         .from('shops').select('*').eq('owner_user_id', userId).maybeSingle();
-      if (error) { showMessage(error.message, 'error'); setLoadingShop(false); return; }
+      if (error) { showMessage(error.message, 'error'); return; }
       setShop(data || null);
       if (data) {
         await Promise.all([
           loadEntries(data.id), loadExpenses(data.id),
           loadPartners(data.id), loadServices(data.id),
+          loadStaffList(data.id),
         ]);
       }
-    } catch (err) {
-      showMessage('Failed to load shop data. Please refresh.', 'error');
-    } finally {
-      setLoadingShop(false);
-    }
+    } catch { showMessage('Failed to load shop data. Please refresh.', 'error'); }
+    finally { setLoadingShop(false); }
   }
 
   async function loadEntries(shopId) {
     const { data, error } = await supabase.from('entries').select('*')
-      .eq('shop_id', shopId)
-      .order('entry_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(500);
+      .eq('shop_id', shopId).order('entry_date', { ascending: false })
+      .order('created_at', { ascending: false }).limit(500);
     if (error) { showMessage(error.message, 'error'); return; }
     setEntries(data || []);
   }
 
   async function loadExpenses(shopId) {
     const { data, error } = await supabase.from('expenses').select('*')
-      .eq('shop_id', shopId)
-      .order('expense_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(500);
+      .eq('shop_id', shopId).order('expense_date', { ascending: false })
+      .order('created_at', { ascending: false }).limit(500);
     if (error) { showMessage(error.message, 'error'); return; }
     setExpenses(data || []);
   }
@@ -132,50 +137,55 @@ function DayBooksApp() {
     setServices(data || []);
   }
 
-  // ── Auth handlers ─────────────────────────────────────────────────────────
+  async function loadStaffList(shopId) {
+    const { data, error } = await supabase.from('shop_staff').select('*')
+      .eq('shop_id', shopId).order('display_id', { ascending: true });
+    if (!error) setStaffList(data || []);
+  }
 
+  // ── Shift login / end shift ───────────────────────────────────────────────
+  function handleShiftLogin(staffMember) {
+    setActiveShift(staffMember);
+    setMessage('');
+  }
+
+  function handleOwnerAccess() {
+    setActiveShift(OWNER_SENTINEL);
+  }
+
+  function handleEndShift() {
+    setActiveShift(null);  // go back to ShiftLogin — owner session stays alive
+    setMessage('');
+    // Reload entries so owner sees any entries the staff added
+    if (shop) loadEntries(shop.id);
+  }
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
   async function handleAuthSubmit({ email, password }) {
     setMessage('');
     if (!email || !password) { showMessage('Please enter email and password', 'error'); return; }
     setSubmitting(true);
-
     if (mode === 'signup') {
       const { data, error } = await signUp(email, password);
       if (error) {
-        // Common error: user already exists but email not confirmed
-        if (error.message?.toLowerCase().includes('already registered')) {
-          showMessage('An account with this email already exists. Try signing in or use forgot password.', 'error');
-        } else {
-          showMessage(error.message, 'error');
-        }
-        setSubmitting(false);
-        return;
+        showMessage(error.message?.toLowerCase().includes('already registered')
+          ? 'An account with this email already exists. Try signing in.' : error.message, 'error');
+        setSubmitting(false); return;
       }
-      // Set user — email_confirmed_at will be null → VerifyEmail shows
       setUser(data.user ?? null);
       showMessage('Account created! Check your email to confirm.', 'success');
-
     } else {
-      // Login
       const { data, error } = await signIn(email, password);
       if (error) {
-        // Make error messages friendlier
-        if (error.message?.toLowerCase().includes('invalid login credentials')) {
-          showMessage('Incorrect email or password. Please try again.', 'error');
-        } else if (error.message?.toLowerCase().includes('email not confirmed')) {
-          showMessage('Please confirm your email before signing in. Check your inbox.', 'error');
-        } else {
-          showMessage(error.message, 'error');
-        }
-        setSubmitting(false);
-        return;
+        showMessage(
+          error.message?.toLowerCase().includes('invalid login credentials') ? 'Incorrect email or password.' :
+          error.message?.toLowerCase().includes('email not confirmed') ? 'Please confirm your email first.' :
+          error.message, 'error');
+        setSubmitting(false); return;
       }
       const loggedInUser = data.user ?? null;
       setUser(loggedInUser);
-      if (loggedInUser?.email_confirmed_at) {
-        await loadShop(loggedInUser.id);
-      }
-      // If email not confirmed, VerifyEmail will render automatically
+      if (loggedInUser?.email_confirmed_at) await loadShop(loggedInUser.id);
     }
     setSubmitting(false);
   }
@@ -183,12 +193,33 @@ function DayBooksApp() {
   async function handleLogout() {
     const { error } = await signOut();
     if (error) { showMessage(error.message, 'error'); return; }
-    setUser(null); setShop(null);
-    setEntries([]); setExpenses([]); setPartners([]); setServices([]);
-    setMessage('');
+    setUser(null); setShop(null); setActiveShift(null); setStaffList([]);
+    setEntries([]); setExpenses([]); setPartners([]); setServices([]); setMessage('');
   }
 
-  // ── Delete account ────────────────────────────────────────────────────────
+  async function handleResetSubmit(e) {
+    e.preventDefault();
+    setResetError('');
+    if (resetPassword.length < 6) { setResetError('Password must be at least 6 characters.'); return; }
+    if (resetPassword !== resetConfirm) { setResetError('Passwords do not match.'); return; }
+    setSubmitting(true);
+    const { error } = await supabase.auth.updateUser({ password: resetPassword });
+    setSubmitting(false);
+    if (error) { setResetError(error.message); return; }
+    setResetDone(true);
+    // After 2s, clear reset mode and load their shop normally
+    setTimeout(async () => {
+      setResetMode(false);
+      setResetDone(false);
+      setResetPassword('');
+      setResetConfirm('');
+      const { user: freshUser } = await getCurrentUser();
+      if (freshUser) {
+        setUser(freshUser);
+        if (freshUser.email_confirmed_at) await loadShop(freshUser.id);
+      }
+    }, 2000);
+  }
 
   async function handleDeleteAccount() {
     if (!user) return;
@@ -199,19 +230,17 @@ function DayBooksApp() {
         await supabase.from('expenses').delete().eq('shop_id', shop.id);
         await supabase.from('partners').delete().eq('shop_id', shop.id);
         await supabase.from('services').delete().eq('shop_id', shop.id);
+        await supabase.from('shop_staff').delete().eq('shop_id', shop.id);
         await supabase.from('shops').delete().eq('id', shop.id);
       }
       await signOut();
-      setUser(null); setShop(null);
+      setUser(null); setShop(null); setActiveShift(null); setStaffList([]);
       setEntries([]); setExpenses([]); setPartners([]); setServices([]);
-    } catch {
-      showMessage('Error deleting account. Please try again.', 'error');
-    }
+    } catch { showMessage('Error deleting account.', 'error'); }
     setSubmitting(false);
   }
 
   // ── Shop ──────────────────────────────────────────────────────────────────
-
   async function handleCreateShop(shopName) {
     setMessage('');
     if (!shopName.trim()) { showMessage('Please enter a shop name', 'error'); return; }
@@ -234,13 +263,50 @@ function DayBooksApp() {
       .update({ name: updatedShop.name, category: updatedShop.category, location: updatedShop.location, currency: updatedShop.currency || 'USD' })
       .eq('id', shop.id).select().single();
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    setShop(data);
-    showMessage('Settings saved', 'success');
+    setShop(data); showMessage('Settings saved', 'success'); setSubmitting(false);
+  }
+
+  // ── Staff management (PIN-based) ──────────────────────────────────────────
+  async function handleAddStaff({ displayId, name, pin, role }) {
+    setMessage('');
+    if (!displayId.trim() || !name.trim() || !pin.trim()) {
+      showMessage('Please fill all staff fields', 'error'); return;
+    }
+    setSubmitting(true);
+    const { error } = await supabase.from('shop_staff').insert({
+      shop_id: shop.id, display_id: displayId.trim(),
+      name: name.trim(), pin: pin.trim(), role: role || 'staff',
+    });
+    if (error) {
+      showMessage(error.message.includes('unique') ? `ID #${displayId} is already taken. Choose another.` : error.message, 'error');
+      setSubmitting(false); return;
+    }
+    showMessage(`${name} added as ${role}.`, 'success');
+    await loadStaffList(shop.id);
+    setSubmitting(false);
+  }
+
+  async function handleRemoveStaff(staffId) {
+    setSubmitting(true);
+    const { error } = await supabase.from('shop_staff')
+      .update({ is_active: false }).eq('id', staffId);
+    if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
+    showMessage('Staff member removed.', 'success');
+    await loadStaffList(shop.id);
+    setSubmitting(false);
+  }
+
+  async function handleResetStaffPin(staffId, newPin) {
+    setSubmitting(true);
+    const { error } = await supabase.from('shop_staff')
+      .update({ pin: newPin.trim() }).eq('id', staffId);
+    if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
+    showMessage('PIN updated.', 'success');
+    await loadStaffList(shop.id);
     setSubmitting(false);
   }
 
   // ── Entries ───────────────────────────────────────────────────────────────
-
   async function handleAddEntry({ description, amount, date, serviceType, paymentType }) {
     setMessage('');
     if (!description.trim() || !amount || Number(amount) <= 0) {
@@ -249,7 +315,11 @@ function DayBooksApp() {
     setSubmitting(true);
     const { error } = await supabase.from('entries').insert({
       shop_id: shop.id, description: description.trim(),
-      amount: Number(amount), kind: 'sale', entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash',
+      amount: Number(amount), kind: 'sale', entry_date: date,
+      service_type: serviceType || null, payment_type: paymentType || 'cash',
+      recorded_by_name: activeShift?.name || null,
+      recorded_by_staff_id: activeShift?.id || null,
+      recorded_by_email: user.email,
     });
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
     showMessage('Income added', 'success');
@@ -267,22 +337,17 @@ function DayBooksApp() {
       .update({ description: description.trim(), amount: Number(amount), entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash' })
       .eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Entry updated', 'success');
-    await loadEntries(shop.id);
-    setSubmitting(false);
+    showMessage('Entry updated', 'success'); await loadEntries(shop.id); setSubmitting(false);
   }
 
   async function handleDeleteEntry(id) {
     setSubmitting(true);
     const { error } = await supabase.from('entries').delete().eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Entry deleted', 'success');
-    await loadEntries(shop.id);
-    setSubmitting(false);
+    showMessage('Entry deleted', 'success'); await loadEntries(shop.id); setSubmitting(false);
   }
 
   // ── Expenses ──────────────────────────────────────────────────────────────
-
   async function handleAddExpense({ description, amount, category, date, paidBy }) {
     setMessage('');
     if (!description.trim() || !amount || Number(amount) <= 0) {
@@ -290,14 +355,11 @@ function DayBooksApp() {
     }
     setSubmitting(true);
     const { error } = await supabase.from('expenses').insert({
-      shop_id: shop.id, description: description.trim(),
-      amount: Number(amount), category: category || 'misc',
-      paid_by: paidBy || user.email, expense_date: date,
+      shop_id: shop.id, description: description.trim(), amount: Number(amount),
+      category: category || 'misc', paid_by: paidBy || user.email, expense_date: date,
     });
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Expense added', 'success');
-    await loadExpenses(shop.id);
-    setSubmitting(false);
+    showMessage('Expense added', 'success'); await loadExpenses(shop.id); setSubmitting(false);
   }
 
   async function handleEditExpense(id, { description, amount, category, date, paidBy }) {
@@ -310,22 +372,17 @@ function DayBooksApp() {
       .update({ description: description.trim(), amount: Number(amount), category: category || 'misc', paid_by: paidBy || user.email, expense_date: date })
       .eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Expense updated', 'success');
-    await loadExpenses(shop.id);
-    setSubmitting(false);
+    showMessage('Expense updated', 'success'); await loadExpenses(shop.id); setSubmitting(false);
   }
 
   async function handleDeleteExpense(id) {
     setSubmitting(true);
     const { error } = await supabase.from('expenses').delete().eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Expense deleted', 'success');
-    await loadExpenses(shop.id);
-    setSubmitting(false);
+    showMessage('Expense deleted', 'success'); await loadExpenses(shop.id); setSubmitting(false);
   }
 
   // ── Partners ──────────────────────────────────────────────────────────────
-
   async function handleAddPartner({ name, equityPct }) {
     setMessage('');
     if (!name.trim() || !equityPct) { showMessage('Please enter partner name and equity %', 'error'); return; }
@@ -334,76 +391,58 @@ function DayBooksApp() {
     const total = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
     if (total + equity > 100) { showMessage(`Total would be ${total + equity}%. Max 100%.`, 'error'); return; }
     setSubmitting(true);
-    const { error } = await supabase.from('partners')
-      .insert({ shop_id: shop.id, name: name.trim(), equity_pct: equity });
+    const { error } = await supabase.from('partners').insert({ shop_id: shop.id, name: name.trim(), equity_pct: equity });
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Partner added', 'success');
-    await loadPartners(shop.id);
-    setSubmitting(false);
+    showMessage('Partner added', 'success'); await loadPartners(shop.id); setSubmitting(false);
   }
 
   async function handleEditPartner(id, { name, equityPct }) {
     setMessage('');
-    if (!name.trim() || !equityPct) { showMessage('Please enter partner name and equity %', 'error'); return; }
+    if (!name.trim() || !equityPct) { showMessage('Please enter name and equity %', 'error'); return; }
     const equity = Number(equityPct);
     if (equity <= 0 || equity > 100) { showMessage('Equity must be between 1 and 100', 'error'); return; }
     const other = partners.filter(p => p.id !== id).reduce((s, p) => s + Number(p.equity_pct || 0), 0);
     if (other + equity > 100) { showMessage(`Total would be ${other + equity}%. Max 100%.`, 'error'); return; }
     setSubmitting(true);
-    const { error } = await supabase.from('partners')
-      .update({ name: name.trim(), equity_pct: equity }).eq('id', id);
+    const { error } = await supabase.from('partners').update({ name: name.trim(), equity_pct: equity }).eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Partner updated', 'success');
-    await loadPartners(shop.id);
-    setSubmitting(false);
+    showMessage('Partner updated', 'success'); await loadPartners(shop.id); setSubmitting(false);
   }
 
   async function handleDeletePartner(id) {
     setSubmitting(true);
     const { error } = await supabase.from('partners').delete().eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Partner removed', 'success');
-    await loadPartners(shop.id);
-    setSubmitting(false);
+    showMessage('Partner removed', 'success'); await loadPartners(shop.id); setSubmitting(false);
   }
 
   // ── Services ──────────────────────────────────────────────────────────────
-
   async function handleAddService(serviceName) {
     setMessage('');
     if (!serviceName.trim()) { showMessage('Please enter a service name', 'error'); return; }
     setSubmitting(true);
-    const { error } = await supabase.from('services')
-      .insert({ shop_id: shop.id, name: serviceName.trim() });
+    const { error } = await supabase.from('services').insert({ shop_id: shop.id, name: serviceName.trim() });
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Service added', 'success');
-    await loadServices(shop.id);
-    setSubmitting(false);
+    showMessage('Service added', 'success'); await loadServices(shop.id); setSubmitting(false);
   }
 
   async function handleEditService(id, newName) {
     setMessage('');
     if (!newName.trim()) { showMessage('Please enter a service name', 'error'); return; }
     setSubmitting(true);
-    const { error } = await supabase.from('services')
-      .update({ name: newName.trim() }).eq('id', id);
+    const { error } = await supabase.from('services').update({ name: newName.trim() }).eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Service updated', 'success');
-    await loadServices(shop.id);
-    setSubmitting(false);
+    showMessage('Service updated', 'success'); await loadServices(shop.id); setSubmitting(false);
   }
 
   async function handleDeleteService(id) {
     setSubmitting(true);
     const { error } = await supabase.from('services').delete().eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    showMessage('Service deleted', 'success');
-    await loadServices(shop.id);
-    setSubmitting(false);
+    showMessage('Service deleted', 'success'); await loadServices(shop.id); setSubmitting(false);
   }
 
   // ── Filters & totals ──────────────────────────────────────────────────────
-
   function isInFilter(dateValue, f) {
     if (f === 'all') return true;
     if (!dateValue) return false;
@@ -437,82 +476,141 @@ function DayBooksApp() {
   }, [entries, expenses]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  if (!authChecked) return <Loader text="Loading..." />;
 
-  // Show nothing until we know if user is logged in — prevents flash of login form
-  if (!authChecked) {
+  // Password reset flow — show set-new-password form
+  if (resetMode) {
     return (
-      <div style={st.loading}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={st.logo}>D</div>
-          <p style={st.text}>Loading...</p>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111110', padding: '24px', fontFamily: "'Outfit', system-ui, sans-serif" }}>
+        <div style={{ width: '100%', maxWidth: '400px', background: '#fff', borderRadius: '16px', padding: '36px 32px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 32px 80px rgba(0,0,0,0.45)' }}>
+          <div>
+            <div style={{ fontSize: '22px', fontWeight: '800', color: '#0A0A0A', letterSpacing: '-0.3px', marginBottom: '6px' }}>Set new password</div>
+            <div style={{ fontSize: '14px', color: '#6B6B6B' }}>Choose a new password for your account.</div>
+          </div>
+          {resetDone ? (
+            <div style={{ padding: '14px', borderRadius: '10px', background: '#F0FDF4', color: '#15803D', border: '1px solid #86EFAC', fontWeight: '600', fontSize: '14px', textAlign: 'center' }}>
+              ✓ Password updated! Taking you to your shop...
+            </div>
+          ) : (
+            <form onSubmit={handleResetSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '700', color: '#3D3D3D', textTransform: 'uppercase', letterSpacing: '0.6px' }}>New password</label>
+                <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  style={{ padding: '12px 14px', borderRadius: '9px', border: '1.5px solid #E8E6E1', fontSize: '14px', background: '#FAFAF8', outline: 'none', color: '#0A0A0A', fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' }}
+                  autoComplete="new-password" required />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '700', color: '#3D3D3D', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Confirm new password</label>
+                <input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)}
+                  placeholder="Re-enter new password"
+                  style={{ padding: '12px 14px', borderRadius: '9px', border: `1.5px solid ${resetConfirm && resetConfirm !== resetPassword ? '#C80815' : '#E8E6E1'}`, fontSize: '14px', background: '#FAFAF8', outline: 'none', color: '#0A0A0A', fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' }}
+                  autoComplete="new-password" required />
+                {resetConfirm && resetConfirm !== resetPassword && (
+                  <span style={{ fontSize: '12px', color: '#C80815', fontWeight: '500' }}>Passwords don't match</span>
+                )}
+              </div>
+              {resetError && (
+                <div style={{ padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '600', background: '#FEF0F0', color: '#C80815', border: '1px solid #FACACA' }}>⚠ {resetError}</div>
+              )}
+              <button type="submit"
+                style={{ padding: '13px', borderRadius: '9px', border: 'none', background: '#C80815', color: '#fff', fontWeight: '700', fontSize: '15px', fontFamily: "'Outfit', sans-serif", cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}
+                disabled={submitting}>
+                {submitting ? 'Updating...' : 'Set new password'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );
   }
+  if (user && loadingShop) return <Loader text="Loading your shop..." />;
+  if (user && !user.email_confirmed_at) return (
+    <VerifyEmail email={user.email} onLogout={handleLogout} onConfirmed={handleEmailConfirmed} />
+  );
+  if (user && !shop) return (
+    <ShopSetup user={user} message={message} messageType={messageType}
+      submitting={submitting} onCreateShop={handleCreateShop} onLogout={handleLogout} />
+  );
 
-  // Loading shop data after confirmed login
-  if (user && loadingShop) {
-    return (
-      <div style={st.loading}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={st.logo}>D</div>
-          <p style={st.text}>Loading your shop...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Email not confirmed — must verify before anything else
-  if (user && !user.email_confirmed_at) {
-    return (
-      <VerifyEmail
-        email={user.email}
-        onLogout={handleLogout}
-        onConfirmed={handleEmailConfirmed}
-      />
-    );
-  }
-
-  // Confirmed but no shop yet
-  if (user && !shop) {
-    return (
-      <ShopSetup
-        user={user} message={message} messageType={messageType}
-        submitting={submitting} onCreateShop={handleCreateShop} onLogout={handleLogout}
-      />
-    );
-  }
-
-  // Fully set up — show dashboard
+  // Shop is loaded — show ShiftLogin or active shift view
   if (user && shop) {
-    return (
-      <Dashboard
-        user={user} shop={shop}
-        entries={filteredEntries}
-        expenses={filteredExpenses}
-        allEntries={entries}
-        allExpenses={expenses}
-        partners={partners} services={services}
-        totals={totals} periodTotals={periodTotals}
-        message={message} messageType={messageType}
-        submitting={submitting} filter={filter} setFilter={setFilter}
-        onAddEntry={handleAddEntry}       onEditEntry={handleEditEntry}       onDeleteEntry={handleDeleteEntry}
-        onAddExpense={handleAddExpense}   onEditExpense={handleEditExpense}   onDeleteExpense={handleDeleteExpense}
-        onAddPartner={handleAddPartner}   onEditPartner={handleEditPartner}   onDeletePartner={handleDeletePartner}
-        onAddService={handleAddService}   onEditService={handleEditService}   onDeleteService={handleDeleteService}
-        onSaveShop={handleSaveShop}       onLogout={handleLogout}
-        onDeleteAccount={handleDeleteAccount}
-      />
-    );
+    // No one on shift — show the PIN picker
+    if (!activeShift) {
+      return (
+        <ShiftLogin
+          shop={shop}
+          staffList={staffList}
+          onShiftLogin={handleShiftLogin}
+          onOwnerAccess={handleOwnerAccess}
+          onOwnerLogout={handleLogout}
+          submitting={submitting}
+        />
+      );
+    }
+
+    // Staff on shift — stripped income-only view
+    if (activeShift.role === 'staff') {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const shiftEntries = entries.filter(e =>
+        e.entry_date === todayStr && e.recorded_by_staff_id === activeShift.id
+      );
+      return (
+        <StaffDashboard
+          user={user} shop={shop} services={services}
+          staffMember={activeShift}
+          entries={shiftEntries}
+          submitting={submitting} message={message} messageType={messageType}
+          onAddEntry={handleAddEntry}
+          onLogout={handleEndShift}
+        />
+      );
+    }
+
+    // Manager on shift — full dashboard
+    if (activeShift.role === 'manager') {
+      return (
+        <Dashboard
+          user={user} shop={shop}
+          entries={filteredEntries} expenses={filteredExpenses}
+          allEntries={entries} allExpenses={expenses}
+          partners={partners} services={services}
+          totals={totals} periodTotals={periodTotals}
+          message={message} messageType={messageType}
+          submitting={submitting} filter={filter} setFilter={setFilter}
+          onAddEntry={handleAddEntry}       onEditEntry={handleEditEntry}       onDeleteEntry={handleDeleteEntry}
+          onAddExpense={handleAddExpense}   onEditExpense={handleEditExpense}   onDeleteExpense={handleDeleteExpense}
+          onAddPartner={handleAddPartner}   onEditPartner={handleEditPartner}   onDeletePartner={handleDeletePartner}
+          onAddService={handleAddService}   onEditService={handleEditService}   onDeleteService={handleDeleteService}
+          onSaveShop={handleSaveShop}       onLogout={handleEndShift}
+          onDeleteAccount={handleDeleteAccount}
+          activeShift={activeShift}
+          staffList={staffList}
+          onAddStaff={handleAddStaff}
+          onRemoveStaff={handleRemoveStaff}
+          onResetStaffPin={handleResetStaffPin}
+        />
+      );
+    }
   }
 
-  // Not logged in — show login/signup form
   return (
     <LoginForm
       mode={mode} message={message} messageType={messageType} submitting={submitting}
       onSubmit={handleAuthSubmit}
       onToggleMode={() => { setMode(mode === 'login' ? 'signup' : 'login'); setMessage(''); }}
     />
+  );
+}
+
+function Loader({ text }) {
+  return (
+    <div style={st.loading}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={st.logo}>D</div>
+        <p style={st.text}>{text}</p>
+      </div>
+    </div>
   );
 }
 
