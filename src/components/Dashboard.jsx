@@ -67,7 +67,7 @@ export default function Dashboard({
     if (!confirmDelete) return;
     const { type, id } = confirmDelete;
     setConfirmDelete(null);
-    if (type === 'entry')   return onDeleteEntry(id);
+    if (type === 'entry')   return onDeleteEntry(id, label);
     if (type === 'expense') return onDeleteExpense(id);
     if (type === 'partner') return onDeletePartner(id);
     if (type === 'service') return onDeleteService(id);
@@ -177,8 +177,8 @@ export default function Dashboard({
                         isEditing={editingEntry === item.id}
                         onEdit={() => setEditingEntry(item.id)}
                         onCancelEdit={() => setEditingEntry(null)}
-                        onSaveEdit={d => { onEditEntry(item.id, d); setEditingEntry(null); }}
-                        onDelete={() => requestDelete('entry', item.id, item.description)}
+                        onSaveEdit={d => { onEditEntry(item.id, d, item); setEditingEntry(null); }}
+                        onDelete={() => requestDelete('entry', item.id, item.description, item.description)}
                         onDuplicate={() => duplicateEntry(item)}
                         submitting={submitting} />
                     ))}
@@ -218,8 +218,8 @@ export default function Dashboard({
                       isEditing={editingEntry === item.id}
                       onEdit={() => setEditingEntry(item.id)}
                       onCancelEdit={() => setEditingEntry(null)}
-                      onSaveEdit={d => { onEditEntry(item.id, d); setEditingEntry(null); }}
-                      onDelete={() => requestDelete('entry', item.id, item.description)}
+                      onSaveEdit={d => { onEditEntry(item.id, d, item); setEditingEntry(null); }}
+                      onDelete={() => requestDelete('entry', item.id, item.description, item.description)}
                       onDuplicate={() => duplicateEntry(item)}
                       submitting={submitting} />
                   ))}
@@ -261,6 +261,9 @@ export default function Dashboard({
             <Panel title="Add Partner">
               <PartnersForm onAddPartner={onAddPartner} submitting={submitting} />
             </Panel>
+            <div style={{ fontSize: '12px', color: equityTotal === 100 ? C.greenText : C.amber, fontWeight: '600', background: equityTotal === 100 ? C.greenBg : C.amberBg, border: `1px solid ${equityTotal === 100 ? C.greenBorder : C.amberBorder}`, borderRadius: '8px', padding: '8px 12px' }}>
+                Equity total: {equityTotal.toFixed(0)}% {equityTotal === 100 ? '✓ Balanced' : `— ${100 - equityTotal}% remaining`}
+              </div>
             {showEquityWarning && (
               <div style={s.warningBanner}>⚠ Equity totals {equityTotal.toFixed(0)}% — should be exactly 100%</div>
             )}
@@ -631,7 +634,7 @@ function EntryRow({ item, services, isEditing, onEdit, onCancelEdit, onSaveEdit,
           {(() => { const ps = paymentStyle(item.payment_type || 'cash'); return <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px', flexShrink: 0, background: ps.bg, color: ps.color, border: `1px solid ${ps.border}` }}>{paymentLabel(item.payment_type || 'cash')}</span>; })()}
           <span style={s.rowDesc}>{item.description}</span>
         </div>
-        <span style={s.rowMeta}>{item.entry_date}</span>
+        <span style={s.rowMeta}>{item.entry_date}{item.recorded_by_name ? ` · ${item.recorded_by_name}` : ''}</span>
       </div>
       <div style={s.rowRight}>
         <span style={{ ...s.rowAmt, color: C.green }}>${Number(item.amount).toFixed(2)}</span>

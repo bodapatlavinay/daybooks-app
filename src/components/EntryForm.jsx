@@ -86,19 +86,33 @@ export default function EntryForm({
 
   return (
     <form onSubmit={handleSubmit} style={{ ...s.form, gap: compact ? '10px' : '12px' }}>
+      {/* ── Quick-tap service buttons ── */}
+      {services.length > 0 && (
+        <div style={s.field}>
+          <div style={s.label}>Service type</div>
+          <div style={s.serviceBtns}>
+            {services.map(sv => (
+              <button
+                key={sv.id}
+                type="button"
+                onClick={() => setServiceType(sv.name)}
+                style={{
+                  ...s.serviceBtn,
+                  background: serviceType === sv.name ? C.dark : C.surface,
+                  color: serviceType === sv.name ? C.white : C.body,
+                  border: `1.5px solid ${serviceType === sv.name ? C.dark : C.border}`,
+                  fontWeight: serviceType === sv.name ? '700' : '500',
+                }}
+              >
+                {sv.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {compact ? (
         <div style={s.row2}>
-          <Field label="Service type" id="ef-svc-compact">
-            <select
-              id="ef-svc-compact"
-              name="ef-svc-compact"
-              value={serviceType}
-              onChange={e => setServiceType(e.target.value)}
-              style={s.input}
-            >
-              {services.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}
-            </select>
-          </Field>
           <Field label="Amount ($)" id="ef-amt-compact">
             <input
               id="ef-amt-compact"
@@ -114,35 +128,19 @@ export default function EntryForm({
               required
             />
           </Field>
+          <Field label="Date" id="ef-date-compact">
+            <input
+              id="ef-date-compact"
+              name="ef-date-compact"
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              style={s.input}
+            />
+          </Field>
         </div>
       ) : (
         <>
-          <Field label="Service type" id="ef-svc">
-            <select
-              id="ef-svc"
-              name="ef-svc"
-              value={serviceType}
-              onChange={e => setServiceType(e.target.value)}
-              style={s.input}
-            >
-              {services.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}
-            </select>
-          </Field>
-
-          <Field label="Description" id="ef-desc">
-            <input
-              id="ef-desc"
-              name="ef-desc"
-              type="text"
-              placeholder="e.g. 2 tires fitted for Honda"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              style={s.input}
-              autoComplete="off"
-              required
-            />
-          </Field>
-
           <div style={s.row2}>
             <Field label="Amount ($)" id="ef-amt">
               <input
@@ -170,34 +168,35 @@ export default function EntryForm({
               />
             </Field>
           </div>
-        </>
-      )}
 
-      {compact && (
-        <div style={s.row2}>
-          <Field label="Date" id="ef-date-compact">
+          <Field label="Description / Job notes" id="ef-desc">
             <input
-              id="ef-date-compact"
-              name="ef-date-compact"
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              style={s.input}
-            />
-          </Field>
-          <Field label="Description (optional)" id="ef-desc-compact">
-            <input
-              id="ef-desc-compact"
-              name="ef-desc-compact"
+              id="ef-desc"
+              name="ef-desc"
               type="text"
-              placeholder="Optional note"
+              placeholder="e.g. 2 tires Honda Civic · Mike · Plate ABC123"
               value={description}
               onChange={e => setDescription(e.target.value)}
               style={s.input}
               autoComplete="off"
             />
           </Field>
-        </div>
+        </>
+      )}
+
+      {compact && (
+        <Field label="Note (optional)" id="ef-desc-compact">
+          <input
+            id="ef-desc-compact"
+            name="ef-desc-compact"
+            type="text"
+            placeholder="Customer name, plate, notes..."
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            style={s.input}
+            autoComplete="off"
+          />
+        </Field>
       )}
 
       <div style={s.field}>
@@ -255,4 +254,6 @@ const s = {
   pills: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
   pill:  { padding: '6px 12px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", border: `1.5px solid ${C.border}`, transition: 'all 0.1s' },
   btn:   { padding: '11px', borderRadius: '8px', border: 'none', background: C.red, color: C.white, fontWeight: '700', fontSize: '14px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' },
+  serviceBtns: { display: 'flex', flexWrap: 'wrap', gap: '7px' },
+  serviceBtn:  { padding: '8px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", transition: 'all 0.1s', border: 'none' },
 };

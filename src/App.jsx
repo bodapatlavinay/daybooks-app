@@ -109,7 +109,8 @@ function DayBooksApp() {
 
   async function loadEntries(shopId) {
     const { data, error } = await supabase.from('entries').select('*')
-      .eq('shop_id', shopId).order('entry_date', { ascending: false })
+      .eq('shop_id', shopId).is('deleted_at', null)
+      .order('entry_date', { ascending: false })
       .order('created_at', { ascending: false }).limit(500);
     if (error) { showMessage(error.message, 'error'); return; }
     setEntries(data || []);
@@ -138,15 +139,26 @@ function DayBooksApp() {
   }
 
   async function loadStaffList(shopId) {
-    const { data, error } = await supabase.from('shop_staff').select('*')
+    const { data, error } = await supabase.from('shop_staff')
+      .select('id, display_id, name, role, is_active')
       .eq('shop_id', shopId).order('display_id', { ascending: true });
     if (!error) setStaffList(data || []);
   }
 
   // ── Shift login / end shift ───────────────────────────────────────────────
-  function handleShiftLogin(staffMember) {
+  async function handleShiftLogin(staffMember, enteredPin) {
+    // Verify PIN server-side — raw PIN never stored in client state
+    const { data: valid, error } = await supabase.rpc('verify_staff_pin', {
+      p_staff_id: staffMember.id,
+      p_pin: enteredPin,
+    });
+    if (error || !valid) {
+      showMessage('Wrong PIN. Please try again.', 'error');
+      return false;
+    }
     setActiveShift(staffMember);
     setMessage('');
+    return true;
   }
 
   function handleOwnerAccess() {
@@ -315,7 +327,7 @@ function DayBooksApp() {
     setSubmitting(true);
     const { error } = await supabase.from('entries').insert({
       shop_id: shop.id, description: description.trim(),
-      amount: Number(amount), kind: 'sale', entry_date: date,
+      amount: Math.round(Number(amount) * 100) / 100, kind: 'sale', entry_date: date,
       service_type: serviceType || null, payment_type: paymentType || 'cash',
       recorded_by_name: activeShift?.name || null,
       recorded_by_staff_id: activeShift?.id || null,
@@ -327,23 +339,46 @@ function DayBooksApp() {
     setSubmitting(false);
   }
 
-  async function handleEditEntry(id, { description, amount, date, serviceType, paymentType }) {
+  async function handleEditEntry(id, { description, amount, date, serviceType, paymentType }, oldEntry) {
     setMessage('');
     if (!description.trim() || !amount || Number(amount) <= 0) {
       showMessage('Please enter a valid description and amount', 'error'); return;
     }
     setSubmitting(true);
+    const roundedAmount = Math.round(Number(amount) * 100) / 100;
     const { error } = await supabase.from('entries')
-      .update({ description: description.trim(), amount: Number(amount), entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash' })
+      .update({ description: description.trim(), amount: roundedAmount, entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash' })
       .eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
+    // Write audit log if amount changed
+    const staffName = activeShift?.name || 'Owner';
+    if (oldEntry && Number(oldEntry.amount) !== roundedAmount) {
+      await supabase.from('audit_log').insert({
+        shop_id: shop.id, entry_id: id, action: 'edit',
+        staff_name: staffName, staff_id: activeShift?.id || null,
+        field_changed: 'amount',
+        old_value: String(oldEntry.amount),
+        new_value: String(roundedAmount),
+        notes: description.trim(),
+      });
+    }
     showMessage('Entry updated', 'success'); await loadEntries(shop.id); setSubmitting(false);
   }
 
-  async function handleDeleteEntry(id) {
+  async function handleDeleteEntry(id, entryDescription) {
     setSubmitting(true);
-    const { error } = await supabase.from('entries').delete().eq('id', id);
+    const staffName = activeShift?.name || 'Owner';
+    // Soft delete — set deleted_at instead of removing from DB
+    const { error } = await supabase.from('entries')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: staffName })
+      .eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
+    // Write audit log
+    await supabase.from('audit_log').insert({
+      shop_id: shop.id, entry_id: id, action: 'delete',
+      staff_name: staffName, staff_id: activeShift?.id || null,
+      notes: entryDescription || 'Entry deleted',
+    });
     showMessage('Entry deleted', 'success'); await loadEntries(shop.id); setSubmitting(false);
   }
 
