@@ -36,6 +36,13 @@ function DayBooksApp() {
   const [loadingShop, setLoadingShop] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Password recovery
+  const [resetMode, setResetMode]       = useState(false);
+  const [resetPwd, setResetPwd]         = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetError, setResetError]     = useState('');
+  const [resetDone, setResetDone]       = useState(false);
+
   const [staffList, setStaffList] = useState([]);
   const [activeShift, setActiveShift] = useState(null);
 
@@ -50,6 +57,15 @@ function DayBooksApp() {
 
   useEffect(() => {
     checkUser();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setResetMode(true);
+        setUser(session?.user ?? null);
+        setAuthChecked(true);
+        setLoadingShop(false);
+      }
+    });
+    return () => subscription?.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -264,6 +280,23 @@ function DayBooksApp() {
     setInventoryItems([]);
     setSettlementPeriods([]);
     setDayClosures([]);
+  }
+
+  async function handleResetSubmit(e) {
+    e.preventDefault();
+    setResetError('');
+    if (resetPwd.length < 6) { setResetError('Password must be at least 6 characters.'); return; }
+    if (resetPwd !== resetConfirm) { setResetError('Passwords do not match.'); return; }
+    setSubmitting(true);
+    const { error } = await supabase.auth.updateUser({ password: resetPwd });
+    setSubmitting(false);
+    if (error) { setResetError(error.message); return; }
+    setResetDone(true);
+    setTimeout(async () => {
+      setResetMode(false); setResetDone(false); setResetPwd(''); setResetConfirm('');
+      const { user: freshUser } = await getCurrentUser();
+      if (freshUser) { setUser(freshUser); if (freshUser.email_confirmed_at) await loadShop(freshUser.id); }
+    }, 2000);
   }
 
   async function handleCreateShop(shopName) {
@@ -711,6 +744,106 @@ function DayBooksApp() {
     }
   }
 
+
+  async function handleEditEntry(id, updates, oldEntry) {
+    setSubmitting(true);
+    try {
+      const rounded = Math.round(Number(updates.amount) * 100) / 100;
+      const { error } = await supabase.from('entries')
+        .update({ description: updates.description?.trim(), amount: rounded,
+          amount_cents: Math.round(rounded * 100),
+          entry_date: updates.date, service_type: updates.serviceType || null,
+          payment_type: updates.paymentType || 'cash' })
+        .eq('id', id);
+      if (error) return showMessage(error.message, 'error');
+      if (oldEntry && Number(oldEntry.amount) !== rounded) {
+        await supabase.from('audit_log').insert({
+          shop_id: shop.id, entry_id: id, action: 'edit',
+          staff_name: activeShift?.name || user.email,
+          field_changed: 'amount', old_value: String(oldEntry.amount), new_value: String(rounded),
+        }).catch(() => {});
+      }
+      await loadEntries(shop.id);
+      showMessage('Entry updated', 'success');
+    } finally { setSubmitting(false); }
+  }
+
+  async function handleEditExpense(id, updates) {
+    setSubmitting(true);
+    try {
+      const rounded = Math.round(Number(updates.amount) * 100) / 100;
+      const { error } = await supabase.from('expenses')
+        .update({ description: updates.description?.trim(), amount: rounded,
+          amount_cents: Math.round(rounded * 100),
+          category: updates.category || 'misc',
+          paid_by: updates.paidBy || user.email,
+          expense_date: updates.date,
+          vendor_name: updates.vendorName || null,
+          payment_method: updates.paymentMethod || 'cash' })
+        .eq('id', id);
+      if (error) return showMessage(error.message, 'error');
+      await loadExpenses(shop.id);
+      showMessage('Expense updated', 'success');
+    } finally { setSubmitting(false); }
+  }
+
+  async function handleEditPartner(id, updates) {
+    const equity = Number(updates.equityPct);
+    const other = partners.filter(p => p.id !== id).reduce((s, p) => s + Number(p.equity_pct || 0), 0);
+    if (equity <= 0 || equity > 100 || other + equity > 100) return showMessage('Invalid equity split', 'error');
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('partners')
+        .update({ name: updates.name?.trim(), equity_pct: equity }).eq('id', id);
+      if (error) return showMessage(error.message, 'error');
+      await loadPartners(shop.id);
+      showMessage('Partner updated', 'success');
+    } finally { setSubmitting(false); }
+  }
+
+  async function handleEditService(id, newName) {
+    if (!newName?.trim()) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('services').update({ name: newName.trim() }).eq('id', id);
+      if (error) return showMessage(error.message, 'error');
+      await loadServices(shop.id);
+      showMessage('Service updated', 'success');
+    } finally { setSubmitting(false); }
+  }
+
+  async function handleDeleteService(id) {
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('services').delete().eq('id', id);
+      if (error) return showMessage(error.message, 'error');
+      await loadServices(shop.id);
+      showMessage('Service deleted', 'success');
+    } finally { setSubmitting(false); }
+  }
+
+  async function handleDeleteAccount() {
+    if (!window.confirm('Delete your entire shop and all data? This cannot be undone.')) return;
+    setSubmitting(true);
+    try {
+      if (shop) {
+        await supabase.from('entries').delete().eq('shop_id', shop.id);
+        await supabase.from('expenses').delete().eq('shop_id', shop.id);
+        await supabase.from('partners').delete().eq('shop_id', shop.id);
+        await supabase.from('services').delete().eq('shop_id', shop.id);
+        await supabase.from('shop_staff').delete().eq('shop_id', shop.id);
+        await supabase.from('inventory_items').delete().eq('shop_id', shop.id);
+        await supabase.from('settlement_periods').delete().eq('shop_id', shop.id);
+        await supabase.from('day_closures').delete().eq('shop_id', shop.id);
+        await supabase.from('shops').delete().eq('id', shop.id);
+      }
+      await signOut();
+      setUser(null); setShop(null); setActiveShift(null);
+      setEntries([]); setExpenses([]); setPartners([]); setServices([]);
+      setStaffList([]); setInventoryItems([]); setSettlementPeriods([]); setDayClosures([]);
+    } finally { setSubmitting(false); }
+  }
+
   async function handleCloseDay({ actualCashCents, notes, summary }) {
     setSubmitting(true);
 
@@ -928,6 +1061,42 @@ function DayBooksApp() {
 
   if (!authChecked) return null;
 
+  if (resetMode) {
+    const inp = { padding:'12px 14px', borderRadius:'9px', border:'1.5px solid #E8E6E1', fontSize:'14px', background:'#FAFAF8', outline:'none', color:'#0A0A0A', fontFamily:"'Outfit',sans-serif", width:'100%', boxSizing:'border-box' };
+    return (
+      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#111110', padding:'24px', fontFamily:"'Outfit',system-ui,sans-serif" }}>
+        <div style={{ width:'100%', maxWidth:'400px', background:'#fff', borderRadius:'16px', padding:'36px 32px', display:'flex', flexDirection:'column', gap:'20px', boxShadow:'0 32px 80px rgba(0,0,0,0.45)' }}>
+          <div>
+            <div style={{ fontSize:'22px', fontWeight:'800', color:'#0A0A0A', letterSpacing:'-0.3px', marginBottom:'6px' }}>Set new password</div>
+            <div style={{ fontSize:'14px', color:'#6B6B6B' }}>Choose a new password for your account.</div>
+          </div>
+          {resetDone ? (
+            <div style={{ padding:'14px', borderRadius:'10px', background:'#F0FDF4', color:'#15803D', border:'1px solid #86EFAC', fontWeight:'600', fontSize:'14px', textAlign:'center' }}>
+              ✓ Password updated! Loading your shop...
+            </div>
+          ) : (
+            <form onSubmit={handleResetSubmit} style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                <label style={{ fontSize:'11px', fontWeight:'700', color:'#3D3D3D', textTransform:'uppercase', letterSpacing:'0.6px' }}>New password</label>
+                <input type="password" value={resetPwd} onChange={e => setResetPwd(e.target.value)} placeholder="At least 6 characters" style={inp} autoComplete="new-password" required />
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                <label style={{ fontSize:'11px', fontWeight:'700', color:'#3D3D3D', textTransform:'uppercase', letterSpacing:'0.6px' }}>Confirm new password</label>
+                <input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} placeholder="Re-enter new password"
+                  style={{ ...inp, borderColor: resetConfirm && resetConfirm !== resetPwd ? '#C80815' : '#E8E6E1' }} autoComplete="new-password" required />
+                {resetConfirm && resetConfirm !== resetPwd && <span style={{ fontSize:'12px', color:'#C80815' }}>Passwords don't match</span>}
+              </div>
+              {resetError && <div style={{ padding:'10px 14px', borderRadius:'9px', fontSize:'13px', fontWeight:'600', background:'#FEF0F0', color:'#C80815', border:'1px solid #FACACA' }}>⚠ {resetError}</div>}
+              <button type="submit" style={{ padding:'13px', borderRadius:'9px', border:'none', background:'#C80815', color:'#fff', fontWeight:'700', fontSize:'15px', fontFamily:"'Outfit',sans-serif", cursor: submitting?'not-allowed':'pointer', opacity:submitting?0.7:1 }} disabled={submitting}>
+                {submitting ? 'Updating...' : 'Set new password'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <LoginForm
@@ -1030,47 +1199,20 @@ function DayBooksApp() {
       filter={filter}
       setFilter={setFilter}
       onAddEntry={handleAddEntry}
-      onEditEntry={() =>
-        showMessage(
-          'Entry editing should be reconnected to your existing row editor.',
-          'error'
-        )
-      }
+      onEditEntry={handleEditEntry}
       onDeleteEntry={handleDeleteEntry}
       onAddExpense={handleAddExpense}
-      onEditExpense={() =>
-        showMessage(
-          'Expense editing should be reconnected to your existing row editor.',
-          'error'
-        )
-      }
+      onEditExpense={handleEditExpense}
       onDeleteExpense={handleDeleteExpense}
       onAddPartner={handleAddPartner}
-      onEditPartner={() =>
-        showMessage(
-          'Partner editing should be reconnected to your existing row editor.',
-          'error'
-        )
-      }
+      onEditPartner={handleEditPartner}
       onDeletePartner={handleDeletePartner}
       onAddService={handleAddService}
-      onEditService={() =>
-        showMessage(
-          'Service editing should be reconnected to your existing row editor.',
-          'error'
-        )
-      }
-      onDeleteService={() =>
-        showMessage(
-          'Service deleting should be reconnected to your existing row editor.',
-          'error'
-        )
-      }
+      onEditService={handleEditService}
+      onDeleteService={handleDeleteService}
       onSaveShop={handleSaveShop}
       onLogout={handleEndShift}
-      onDeleteAccount={() =>
-        showMessage('Reconnect your existing delete account logic here.', 'error')
-      }
+      onDeleteAccount={handleDeleteAccount}
       activeShift={activeShift}
       staffList={staffList}
       onAddStaff={handleAddStaff}

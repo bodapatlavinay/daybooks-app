@@ -79,6 +79,9 @@ export default function Dashboard(props) {
   });
   const [resetPinId, setResetPinId] = useState(null);
   const [resetPinVal, setResetPinVal] = useState('');
+  const [editingEntry, setEditingEntry]   = useState(null);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [editingPartner, setEditingPartner] = useState(null);
 
   const eqTotal = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
 
@@ -205,13 +208,20 @@ export default function Dashboard(props) {
               <Empty text="No entries for this period." />
             ) : (
               filteredEntries.map((item) => (
-                <SimpleRow
-                  key={item.id}
-                  title={`${item.service_type || 'General'} • ${item.description}`}
-                  meta={[item.entry_date, item.customer_name, item.vehicle_plate].filter(Boolean).join(' • ')}
-                  amount={Number(item.amount || 0)}
-                  onDelete={() => onDeleteEntry(item.id, item.description)}
-                />
+                editingEntry === item.id ? (
+                  <EditEntryInline key={item.id} item={item} services={services}
+                    onSave={(d) => { onEditEntry(item.id, d, item); setEditingEntry(null); }}
+                    onCancel={() => setEditingEntry(null)} submitting={submitting} />
+                ) : (
+                  <SimpleRow
+                    key={item.id}
+                    title={`${item.service_type || 'General'} • ${item.description}`}
+                    meta={[item.entry_date, item.recorded_by_name, item.customer_name, item.vehicle_plate].filter(Boolean).join(' • ')}
+                    amount={Number(item.amount || 0)}
+                    onEdit={() => setEditingEntry(item.id)}
+                    onDelete={() => onDeleteEntry(item.id, item.description)}
+                  />
+                )
               ))
             )}
           </Panel>
@@ -234,13 +244,20 @@ export default function Dashboard(props) {
               <Empty text="No expenses for this period." />
             ) : (
               filteredExpenses.map((item) => (
-                <SimpleRow
-                  key={item.id}
-                  title={`${item.vendor_name || item.description}`}
-                  meta={[item.expense_date, item.category, item.payment_method].filter(Boolean).join(' • ')}
-                  amount={-Math.abs(Number(item.amount || 0))}
-                  onDelete={() => onDeleteExpense(item.id)}
-                />
+                editingExpense === item.id ? (
+                  <EditExpenseInline key={item.id} item={item}
+                    onSave={(d) => { onEditExpense(item.id, d); setEditingExpense(null); }}
+                    onCancel={() => setEditingExpense(null)} submitting={submitting} />
+                ) : (
+                  <SimpleRow
+                    key={item.id}
+                    title={`${item.vendor_name || item.description}`}
+                    meta={[item.expense_date, item.category, item.payment_method].filter(Boolean).join(' • ')}
+                    amount={-Math.abs(Number(item.amount || 0))}
+                    onEdit={() => setEditingExpense(item.id)}
+                    onDelete={() => onDeleteExpense(item.id)}
+                  />
+                )
               ))
             )}
           </Panel>
@@ -270,13 +287,20 @@ export default function Dashboard(props) {
                 <Empty text="No partners yet." />
               ) : (
                 partners.map((p) => (
-                  <SimpleRow
-                    key={p.id}
-                    title={p.name}
-                    meta={`${Number(p.equity_pct || 0).toFixed(0)}% ownership`}
-                    amount={null}
-                    onDelete={() => onDeletePartner(p.id)}
-                  />
+                  editingPartner === p.id ? (
+                    <EditPartnerInline key={p.id} partner={p}
+                      onSave={(d) => { onEditPartner(p.id, d); setEditingPartner(null); }}
+                      onCancel={() => setEditingPartner(null)} submitting={submitting} />
+                  ) : (
+                    <SimpleRow
+                      key={p.id}
+                      title={p.name}
+                      meta={`${Number(p.equity_pct || 0).toFixed(0)}% ownership`}
+                      amount={null}
+                      onEdit={() => setEditingPartner(p.id)}
+                      onDelete={() => onDeletePartner(p.id)}
+                    />
+                  )
                 ))
               )}
             </Panel>
@@ -520,7 +544,7 @@ function Empty({ text }) {
   return <div style={s.empty}>{text}</div>;
 }
 
-function SimpleRow({ title, meta, amount, onDelete }) {
+function SimpleRow({ title, meta, amount, onEdit, onDelete }) {
   return (
     <div style={s.simpleRow}>
       <div style={{ minWidth: 0 }}>
@@ -530,19 +554,12 @@ function SimpleRow({ title, meta, amount, onDelete }) {
 
       <div style={s.simpleRight}>
         {amount != null && (
-          <div
-            style={{
-              ...s.simpleAmount,
-              color: amount >= 0 ? C.greenText : C.red,
-            }}
-          >
-            {amount < 0 ? '-' : ''}
-            {money(Math.abs(amount))}
+          <div style={{ ...s.simpleAmount, color: amount >= 0 ? C.greenText : C.red }}>
+            {amount < 0 ? '-' : ''}{money(Math.abs(amount))}
           </div>
         )}
-        <button style={s.deleteTextBtn} onClick={onDelete}>
-          Delete
-        </button>
+        {onEdit && <button style={s.editTextBtn} onClick={onEdit}>Edit</button>}
+        <button style={s.deleteTextBtn} onClick={onDelete}>Delete</button>
       </div>
     </div>
   );
@@ -775,6 +792,16 @@ const s = {
     fontWeight: '800',
   },
 
+  editTextBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: C.mid,
+    cursor: 'pointer',
+    fontWeight: '700',
+    fontFamily: "'Outfit', sans-serif",
+    fontSize: '13px',
+  },
+
   deleteTextBtn: {
     background: 'transparent',
     border: 'none',
@@ -809,3 +836,100 @@ const s = {
     border: 0,
   },
 };
+
+
+function EditEntryInline({ item, services, onSave, onCancel, submitting }) {
+  const [desc, setDesc]   = useState(item.description || '');
+  const [amt, setAmt]     = useState(String(item.amount || ''));
+  const [date, setDate]   = useState(item.entry_date || '');
+  const [svc, setSvc]     = useState(item.service_type || '');
+  const [pay, setPay]     = useState(item.payment_type || 'cash');
+  return (
+    <div style={{ padding:'12px', background:'#FAFAF8', border:`1px solid #E8E6E1`, borderRadius:'10px', display:'flex', flexDirection:'column', gap:'10px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px,1fr))', gap:'8px' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Description</label>
+          <input value={desc} onChange={e=>setDesc(e.target.value)} style={ei} />
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Amount ($)</label>
+          <input type="number" value={amt} onChange={e=>setAmt(e.target.value)} style={ei} />
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Date</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={ei} />
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Service</label>
+          <select value={svc} onChange={e=>setSvc(e.target.value)} style={ei}>
+            {services.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
+        <button onClick={onCancel} style={cancelBtn}>Cancel</button>
+        <button onClick={()=>onSave({ description:desc, amount:amt, date, serviceType:svc, paymentType:pay })} style={saveBtn} disabled={submitting}>{submitting?'Saving...':'Save'}</button>
+      </div>
+    </div>
+  );
+}
+
+function EditExpenseInline({ item, onSave, onCancel, submitting }) {
+  const [desc, setDesc] = useState(item.description || '');
+  const [amt, setAmt]   = useState(String(item.amount || ''));
+  const [date, setDate] = useState(item.expense_date || '');
+  const [vendor, setVendor] = useState(item.vendor_name || '');
+  return (
+    <div style={{ padding:'12px', background:'#FAFAF8', border:`1px solid #E8E6E1`, borderRadius:'10px', display:'flex', flexDirection:'column', gap:'10px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px,1fr))', gap:'8px' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Description</label>
+          <input value={desc} onChange={e=>setDesc(e.target.value)} style={ei} />
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Amount ($)</label>
+          <input type="number" value={amt} onChange={e=>setAmt(e.target.value)} style={ei} />
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Date</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={ei} />
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Vendor</label>
+          <input value={vendor} onChange={e=>setVendor(e.target.value)} style={ei} />
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
+        <button onClick={onCancel} style={cancelBtn}>Cancel</button>
+        <button onClick={()=>onSave({ description:desc, amount:amt, date, vendorName:vendor, category:item.category, paidBy:item.paid_by, paymentMethod:item.payment_method })} style={saveBtn} disabled={submitting}>{submitting?'Saving...':'Save'}</button>
+      </div>
+    </div>
+  );
+}
+
+function EditPartnerInline({ partner, onSave, onCancel, submitting }) {
+  const [name, setName]     = useState(partner.name || '');
+  const [equity, setEquity] = useState(String(partner.equity_pct || ''));
+  return (
+    <div style={{ padding:'12px', background:'#FAFAF8', border:`1px solid #E8E6E1`, borderRadius:'10px', display:'flex', flexDirection:'column', gap:'10px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Name</label>
+          <input value={name} onChange={e=>setName(e.target.value)} style={ei} />
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+          <label style={{ fontSize:'10px', fontWeight:'700', color:'#9E9E9E', textTransform:'uppercase' }}>Equity %</label>
+          <input type="number" value={equity} onChange={e=>setEquity(e.target.value)} style={ei} min="1" max="100" />
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
+        <button onClick={onCancel} style={cancelBtn}>Cancel</button>
+        <button onClick={()=>onSave({ name, equityPct:equity })} style={saveBtn} disabled={submitting}>{submitting?'Saving...':'Save'}</button>
+      </div>
+    </div>
+  );
+}
+
+const ei = { padding:'8px 10px', borderRadius:'7px', border:'1px solid #E8E6E1', fontSize:'13px', background:'#fff', outline:'none', width:'100%', boxSizing:'border-box', fontFamily:"'Outfit',sans-serif" };
+const saveBtn = { padding:'8px 16px', borderRadius:'7px', border:'none', background:'#1A1A1A', color:'#fff', fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:"'Outfit',sans-serif" };
+const cancelBtn = { padding:'8px 12px', borderRadius:'7px', border:'1px solid #E8E6E1', background:'#fff', color:'#6B6B6B', fontWeight:'600', fontSize:'13px', cursor:'pointer', fontFamily:"'Outfit',sans-serif" };
