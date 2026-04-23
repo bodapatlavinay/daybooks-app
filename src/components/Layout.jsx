@@ -250,7 +250,7 @@ const d = {
     width: '100%', transition: 'background 0.12s',
   },
 
-  main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 },
+  main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, width: 0 },
 
   topBar: {
     background: C.white,
@@ -273,7 +273,7 @@ const d = {
   },
   liveDot: { width: '6px', height: '6px', background: C.green, borderRadius: '50%' },
 
-  content: { flex: 1, overflowY: 'auto', padding: '28px 32px' },
+  content: { flex: 1, overflowY: 'auto', padding: '24px 28px', minWidth: 0 },
 };
 
 // ── Mobile styles ──────────────────────────────────────────────────────────────
@@ -292,7 +292,7 @@ const m = {
   liveBadge: { display: 'flex', alignItems: 'center', gap: '5px', background: C.greenBg, padding: '4px 10px', borderRadius: '20px', border: `1px solid ${C.greenBorder}` },
   liveDot: { width: '6px', height: '6px', background: C.green, borderRadius: '50%' },
   liveText: { fontSize: '11px', fontWeight: '700', color: C.greenText },
-  content: { flex: 1, overflowY: 'auto', padding: '16px' },
+  content: { flex: 1, overflowY: 'auto', padding: '12px', minWidth: 0 },
   tabBar: {
     background: C.white, borderTop: `1px solid ${C.border}`,
     display: 'flex', flexShrink: 0,

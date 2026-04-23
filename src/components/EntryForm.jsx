@@ -86,116 +86,86 @@ export default function EntryForm({
 
   return (
     <form onSubmit={handleSubmit} style={{ ...s.form, gap: compact ? '10px' : '12px' }}>
-      {/* ── Quick-tap service buttons ── */}
-      {services.length > 0 && (
+      {compact ? (
         <div style={s.field}>
           <div style={s.label}>Service type</div>
           <div style={s.serviceBtns}>
             {services.map(sv => (
-              <button
-                key={sv.id}
-                type="button"
+              <button key={sv.id} type="button"
                 onClick={() => setServiceType(sv.name)}
                 style={{
                   ...s.serviceBtn,
                   background: serviceType === sv.name ? C.dark : C.surface,
-                  color: serviceType === sv.name ? C.white : C.body,
-                  border: `1.5px solid ${serviceType === sv.name ? C.dark : C.border}`,
+                  color:      serviceType === sv.name ? C.white  : C.body,
+                  border:     `1.5px solid ${serviceType === sv.name ? C.dark : C.border}`,
                   fontWeight: serviceType === sv.name ? '700' : '500',
-                }}
-              >
+                }}>
                 {sv.name}
               </button>
             ))}
           </div>
         </div>
-      )}
-
-      {compact ? (
-        <div style={s.row2}>
-          <Field label="Amount ($)" id="ef-amt-compact">
-            <input
-              id="ef-amt-compact"
-              name="ef-amt-compact"
-              type="number"
-              placeholder="0.00"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              style={s.input}
-              min="0.01"
-              step="0.01"
-              autoComplete="off"
-              required
-            />
-          </Field>
-          <Field label="Date" id="ef-date-compact">
-            <input
-              id="ef-date-compact"
-              name="ef-date-compact"
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              style={s.input}
-            />
-          </Field>
-        </div>
       ) : (
         <>
+          <div style={s.field}>
+            <div style={s.label}>Service type</div>
+            <div style={s.serviceBtns}>
+              {services.map(sv => (
+                <button key={sv.id} type="button"
+                  onClick={() => setServiceType(sv.name)}
+                  style={{
+                    ...s.serviceBtn,
+                    background: serviceType === sv.name ? C.dark : C.surface,
+                    color:      serviceType === sv.name ? C.white  : C.body,
+                    border:     `1.5px solid ${serviceType === sv.name ? C.dark : C.border}`,
+                    fontWeight: serviceType === sv.name ? '700' : '500',
+                  }}>
+                  {sv.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div style={s.row2}>
             <Field label="Amount ($)" id="ef-amt">
-              <input
-                id="ef-amt"
-                name="ef-amt"
-                type="number"
-                placeholder="0.00"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                style={s.input}
-                min="0.01"
-                step="0.01"
-                autoComplete="off"
-                required
-              />
+              <input id="ef-amt" name="ef-amt" type="number" placeholder="0.00"
+                value={amount} onChange={e => setAmount(e.target.value)}
+                style={s.input} min="0.01" step="0.01" autoComplete="off" required />
             </Field>
             <Field label="Date" id="ef-date">
-              <input
-                id="ef-date"
-                name="ef-date"
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                style={s.input}
-              />
+              <input id="ef-date" name="ef-date" type="date"
+                value={date} onChange={e => setDate(e.target.value)} style={s.input} />
             </Field>
           </div>
 
-          <Field label="Description / Job notes" id="ef-desc">
-            <input
-              id="ef-desc"
-              name="ef-desc"
-              type="text"
-              placeholder="e.g. 2 tires Honda Civic · Mike · Plate ABC123"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              style={s.input}
-              autoComplete="off"
-            />
+          <Field label="Customer / Job notes (optional)" id="ef-desc">
+            <input id="ef-desc" name="ef-desc" type="text"
+              placeholder="e.g. Honda Civic · Plate ABC123 · John"
+              value={description} onChange={e => setDescription(e.target.value)}
+              style={s.input} autoComplete="off" />
           </Field>
         </>
       )}
 
       {compact && (
-        <Field label="Note (optional)" id="ef-desc-compact">
-          <input
-            id="ef-desc-compact"
-            name="ef-desc-compact"
-            type="text"
-            placeholder="Customer name, plate, notes..."
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            style={s.input}
-            autoComplete="off"
-          />
+        <div style={s.row2}>
+          <Field label="Amount ($)" id="ef-amt-c">
+            <input id="ef-amt-c" name="ef-amt-c" type="number" placeholder="0.00"
+              value={amount} onChange={e => setAmount(e.target.value)}
+              style={s.input} min="0.01" step="0.01" autoComplete="off" required />
+          </Field>
+          <Field label="Date" id="ef-date-c">
+            <input id="ef-date-c" name="ef-date-c" type="date"
+              value={date} onChange={e => setDate(e.target.value)} style={s.input} />
+          </Field>
+        </div>
+      )}
+      {compact && (
+        <Field label="Note (optional)" id="ef-desc-c">
+          <input id="ef-desc-c" name="ef-desc-c" type="text"
+            placeholder="Customer, plate, notes..."
+            value={description} onChange={e => setDescription(e.target.value)}
+            style={s.input} autoComplete="off" />
         </Field>
       )}
 
@@ -247,13 +217,13 @@ function Field({ label, id, children }) {
 
 const s = {
   form:  { display: 'flex', flexDirection: 'column' },
-  row2:  { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+  row2:  { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' },
   field: { display: 'flex', flexDirection: 'column', gap: '5px' },
   label: { fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
-  input: { padding: '10px 12px', borderRadius: '8px', border: `1.5px solid ${C.border}`, fontSize: '13px', background: C.surface, outline: 'none', color: C.black, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' },
+  input: { padding: '10px 12px', borderRadius: '8px', border: `1.5px solid ${C.border}`, fontSize: '14px', background: C.surface, outline: 'none', color: C.black, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' },
   pills: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
   pill:  { padding: '6px 12px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", border: `1.5px solid ${C.border}`, transition: 'all 0.1s' },
-  btn:   { padding: '11px', borderRadius: '8px', border: 'none', background: C.red, color: C.white, fontWeight: '700', fontSize: '14px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' },
-  serviceBtns: { display: 'flex', flexWrap: 'wrap', gap: '7px' },
-  serviceBtn:  { padding: '8px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", transition: 'all 0.1s', border: 'none' },
+  btn:        { padding: '11px', borderRadius: '8px', border: 'none', background: C.red, color: C.white, fontWeight: '700', fontSize: '14px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' },
+  serviceBtns: { display: 'flex', flexWrap: 'wrap', gap: '6px', width: '100%' },
+  serviceBtn:  { padding: '9px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", transition: 'all 0.1s', minHeight: '38px' },
 };

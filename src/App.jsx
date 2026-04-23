@@ -34,7 +34,7 @@ function DayBooksApp() {
 
   // Password recovery
   const [resetMode, setResetMode]         = useState(false);
-  const [resetPassword, setResetPassword] = useState('');
+  const [resetPwd, setResetPwd]           = useState('');
   const [resetConfirm, setResetConfirm]   = useState('');
   const [resetError, setResetError]       = useState('');
   const [resetDone, setResetDone]         = useState(false);
@@ -59,7 +59,6 @@ function DayBooksApp() {
 
   useEffect(() => {
     checkUser();
-    // Listen for password recovery event from email link click
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setResetMode(true);
@@ -141,19 +140,18 @@ function DayBooksApp() {
   async function loadStaffList(shopId) {
     const { data, error } = await supabase.from('shop_staff')
       .select('id, display_id, name, role, is_active')
-      .eq('shop_id', shopId).order('display_id', { ascending: true });
+      .eq('shop_id', shopId).eq('is_active', true).order('display_id', { ascending: true });
     if (!error) setStaffList(data || []);
   }
 
   // ── Shift login / end shift ───────────────────────────────────────────────
   async function handleShiftLogin(staffMember, enteredPin) {
-    // Verify PIN server-side — raw PIN never stored in client state
     const { data: valid, error } = await supabase.rpc('verify_staff_pin', {
       p_staff_id: staffMember.id,
       p_pin: enteredPin,
     });
     if (error || !valid) {
-      showMessage('Wrong PIN. Please try again.', 'error');
+      showMessage('Wrong PIN. Try again.', 'error');
       return false;
     }
     setActiveShift(staffMember);
@@ -212,24 +210,17 @@ function DayBooksApp() {
   async function handleResetSubmit(e) {
     e.preventDefault();
     setResetError('');
-    if (resetPassword.length < 6) { setResetError('Password must be at least 6 characters.'); return; }
-    if (resetPassword !== resetConfirm) { setResetError('Passwords do not match.'); return; }
+    if (resetPwd.length < 6) { setResetError('Password must be at least 6 characters.'); return; }
+    if (resetPwd !== resetConfirm) { setResetError('Passwords do not match.'); return; }
     setSubmitting(true);
-    const { error } = await supabase.auth.updateUser({ password: resetPassword });
+    const { error } = await supabase.auth.updateUser({ password: resetPwd });
     setSubmitting(false);
     if (error) { setResetError(error.message); return; }
     setResetDone(true);
-    // After 2s, clear reset mode and load their shop normally
     setTimeout(async () => {
-      setResetMode(false);
-      setResetDone(false);
-      setResetPassword('');
-      setResetConfirm('');
+      setResetMode(false); setResetDone(false); setResetPwd(''); setResetConfirm('');
       const { user: freshUser } = await getCurrentUser();
-      if (freshUser) {
-        setUser(freshUser);
-        if (freshUser.email_confirmed_at) await loadShop(freshUser.id);
-      }
+      if (freshUser) { setUser(freshUser); if (freshUser.email_confirmed_at) await loadShop(freshUser.id); }
     }, 2000);
   }
 
@@ -345,40 +336,37 @@ function DayBooksApp() {
       showMessage('Please enter a valid description and amount', 'error'); return;
     }
     setSubmitting(true);
-    const roundedAmount = Math.round(Number(amount) * 100) / 100;
+    const rounded = Math.round(Number(amount) * 100) / 100;
     const { error } = await supabase.from('entries')
-      .update({ description: description.trim(), amount: roundedAmount, entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash' })
+      .update({ description: description.trim(), amount: rounded, entry_date: date, service_type: serviceType || null, payment_type: paymentType || 'cash' })
       .eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    // Write audit log if amount changed
-    const staffName = activeShift?.name || 'Owner';
-    if (oldEntry && Number(oldEntry.amount) !== roundedAmount) {
+    // Audit log if amount changed
+    if (oldEntry && Number(oldEntry.amount) !== rounded) {
+      const staffName = activeShift?.id !== '__owner__' ? (activeShift?.name || null) : null;
       await supabase.from('audit_log').insert({
         shop_id: shop.id, entry_id: id, action: 'edit',
-        staff_name: staffName, staff_id: activeShift?.id || null,
-        field_changed: 'amount',
-        old_value: String(oldEntry.amount),
-        new_value: String(roundedAmount),
+        staff_name: staffName || 'Owner', staff_id: activeShift?.id !== '__owner__' ? activeShift?.id : null,
+        field_changed: 'amount', old_value: String(oldEntry.amount), new_value: String(rounded),
         notes: description.trim(),
-      });
+      }).catch(() => {});
     }
     showMessage('Entry updated', 'success'); await loadEntries(shop.id); setSubmitting(false);
   }
 
   async function handleDeleteEntry(id, entryDescription) {
     setSubmitting(true);
-    const staffName = activeShift?.name || 'Owner';
-    // Soft delete — set deleted_at instead of removing from DB
+    const staffName = activeShift?.id !== '__owner__' ? (activeShift?.name || null) : null;
     const { error } = await supabase.from('entries')
-      .update({ deleted_at: new Date().toISOString(), deleted_by: staffName })
+      .update({ deleted_at: new Date().toISOString(), deleted_by: staffName || user.email })
       .eq('id', id);
     if (error) { showMessage(error.message, 'error'); setSubmitting(false); return; }
-    // Write audit log
+    // Audit log
     await supabase.from('audit_log').insert({
       shop_id: shop.id, entry_id: id, action: 'delete',
-      staff_name: staffName, staff_id: activeShift?.id || null,
+      staff_name: staffName || 'Owner', staff_id: activeShift?.id !== '__owner__' ? activeShift?.id : null,
       notes: entryDescription || 'Entry deleted',
-    });
+    }).catch(() => {});
     showMessage('Entry deleted', 'success'); await loadEntries(shop.id); setSubmitting(false);
   }
 
@@ -513,43 +501,42 @@ function DayBooksApp() {
   // ── Render ────────────────────────────────────────────────────────────────
   if (!authChecked) return <Loader text="Loading..." />;
 
-  // Password reset flow — show set-new-password form
   if (resetMode) {
+    const inp = { padding:'12px 14px',borderRadius:'9px',border:'1.5px solid #E8E6E1',fontSize:'14px',background:'#FAFAF8',outline:'none',color:'#0A0A0A',fontFamily:"'Outfit',sans-serif",width:'100%',boxSizing:'border-box' };
+    const lbl = { fontSize:'11px',fontWeight:'700',color:'#3D3D3D',textTransform:'uppercase',letterSpacing:'0.6px' };
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111110', padding: '24px', fontFamily: "'Outfit', system-ui, sans-serif" }}>
-        <div style={{ width: '100%', maxWidth: '400px', background: '#fff', borderRadius: '16px', padding: '36px 32px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 32px 80px rgba(0,0,0,0.45)' }}>
+      <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#111110',padding:'24px',fontFamily:"'Outfit',system-ui,sans-serif" }}>
+        <div style={{ width:'100%',maxWidth:'400px',background:'#fff',borderRadius:'16px',padding:'36px 32px',display:'flex',flexDirection:'column',gap:'20px',boxShadow:'0 32px 80px rgba(0,0,0,0.45)' }}>
           <div>
-            <div style={{ fontSize: '22px', fontWeight: '800', color: '#0A0A0A', letterSpacing: '-0.3px', marginBottom: '6px' }}>Set new password</div>
-            <div style={{ fontSize: '14px', color: '#6B6B6B' }}>Choose a new password for your account.</div>
+            <div style={{ fontSize:'22px',fontWeight:'800',color:'#0A0A0A',letterSpacing:'-0.3px',marginBottom:'6px' }}>Set new password</div>
+            <div style={{ fontSize:'14px',color:'#6B6B6B' }}>Choose a new password for your DayBooks account.</div>
           </div>
           {resetDone ? (
-            <div style={{ padding: '14px', borderRadius: '10px', background: '#F0FDF4', color: '#15803D', border: '1px solid #86EFAC', fontWeight: '600', fontSize: '14px', textAlign: 'center' }}>
-              ✓ Password updated! Taking you to your shop...
+            <div style={{ padding:'14px',borderRadius:'10px',background:'#F0FDF4',color:'#15803D',border:'1px solid #86EFAC',fontWeight:'600',fontSize:'14px',textAlign:'center' }}>
+              ✓ Password updated! Loading your shop...
             </div>
           ) : (
-            <form onSubmit={handleResetSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '11px', fontWeight: '700', color: '#3D3D3D', textTransform: 'uppercase', letterSpacing: '0.6px' }}>New password</label>
-                <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  style={{ padding: '12px 14px', borderRadius: '9px', border: '1.5px solid #E8E6E1', fontSize: '14px', background: '#FAFAF8', outline: 'none', color: '#0A0A0A', fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' }}
-                  autoComplete="new-password" required />
+            <form onSubmit={handleResetSubmit} style={{ display:'flex',flexDirection:'column',gap:'14px' }}>
+              <div style={{ display:'flex',flexDirection:'column',gap:'6px' }}>
+                <label style={lbl}>New password</label>
+                <input type="password" value={resetPwd} onChange={e => setResetPwd(e.target.value)}
+                  placeholder="At least 6 characters" style={inp} autoComplete="new-password" required />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '11px', fontWeight: '700', color: '#3D3D3D', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Confirm new password</label>
+              <div style={{ display:'flex',flexDirection:'column',gap:'6px' }}>
+                <label style={lbl}>Confirm new password</label>
                 <input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)}
                   placeholder="Re-enter new password"
-                  style={{ padding: '12px 14px', borderRadius: '9px', border: `1.5px solid ${resetConfirm && resetConfirm !== resetPassword ? '#C80815' : '#E8E6E1'}`, fontSize: '14px', background: '#FAFAF8', outline: 'none', color: '#0A0A0A', fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' }}
+                  style={{ ...inp, borderColor: resetConfirm && resetConfirm !== resetPwd ? '#C80815' : '#E8E6E1' }}
                   autoComplete="new-password" required />
-                {resetConfirm && resetConfirm !== resetPassword && (
-                  <span style={{ fontSize: '12px', color: '#C80815', fontWeight: '500' }}>Passwords don't match</span>
+                {resetConfirm && resetConfirm !== resetPwd && (
+                  <span style={{ fontSize:'12px',color:'#C80815',fontWeight:'500' }}>Passwords don't match</span>
                 )}
               </div>
               {resetError && (
-                <div style={{ padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '600', background: '#FEF0F0', color: '#C80815', border: '1px solid #FACACA' }}>⚠ {resetError}</div>
+                <div style={{ padding:'10px 14px',borderRadius:'9px',fontSize:'13px',fontWeight:'600',background:'#FEF0F0',color:'#C80815',border:'1px solid #FACACA' }}>⚠ {resetError}</div>
               )}
               <button type="submit"
-                style={{ padding: '13px', borderRadius: '9px', border: 'none', background: '#C80815', color: '#fff', fontWeight: '700', fontSize: '15px', fontFamily: "'Outfit', sans-serif", cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}
+                style={{ padding:'13px',borderRadius:'9px',border:'none',background:'#C80815',color:'#fff',fontWeight:'700',fontSize:'15px',fontFamily:"'Outfit',sans-serif",cursor:submitting?'not-allowed':'pointer',opacity:submitting?0.7:1 }}
                 disabled={submitting}>
                 {submitting ? 'Updating...' : 'Set new password'}
               </button>

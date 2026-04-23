@@ -30,7 +30,7 @@
     async function handleLogin() {
         if (!selectedStaff) return;
         if (!pin) { setError('Enter your PIN'); return; }
-        // PIN verified server-side — pass to parent which calls Supabase RPC
+        // Verify PIN server-side — raw PIN never stored in browser
         const ok = await onShiftLogin(selectedStaff, pin);
         if (ok === false) {
         setError('Wrong PIN. Try again.');
@@ -98,7 +98,7 @@
             </div>
 
             <button
-                onClick={() => handleLogin()}
+                onClick={handleLogin}
                 disabled={pin.length === 0 || submitting}
                 style={{ ...s.loginBtn, opacity: pin.length === 0 ? 0.4 : 1 }}
             >
@@ -185,10 +185,10 @@
     }
 
     const s = {
-    page: { minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: "'Outfit', system-ui, sans-serif" },
+    page: { minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: "'Outfit', system-ui, sans-serif", boxSizing: 'border-box' },
 
     // Picker
-    pickerCard:  { width: '100%', maxWidth: '480px', background: C.white, borderRadius: '20px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 8px 40px rgba(0,0,0,0.1)' },
+    pickerCard:  { width: '100%', maxWidth: '480px', background: C.white, borderRadius: '16px', padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 8px 40px rgba(0,0,0,0.1)' },
     shopHeader:  { display: 'flex', alignItems: 'center', gap: '14px', paddingBottom: '16px', borderBottom: `1px solid ${C.border}` },
     logoMark:    { width: '44px', height: '44px', background: C.red, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     logoLetter:  { fontSize: '24px', fontWeight: '900', color: '#fff' },
@@ -197,7 +197,7 @@
 
     section:      { display: 'flex', flexDirection: 'column', gap: '10px' },
     sectionLabel: { fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.7px' },
-    staffGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' },
+    staffGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: '8px' },
     staffCard:    { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 8px', borderRadius: '12px', border: `1.5px solid ${C.border}`, background: C.surface, cursor: 'pointer', transition: 'all 0.12s', fontFamily: "'Outfit', sans-serif" },
     staffAvatar:  { width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: '800', flexShrink: 0 },
     staffCardName:{ fontSize: '13px', fontWeight: '700', color: C.dark, textAlign: 'center' },
@@ -213,7 +213,7 @@
     ownerLogoutBtn: { background: 'none', border: 'none', color: C.muted, fontSize: '12px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", textDecoration: 'underline', textUnderlineOffset: '2px', padding: '4px' },
 
     // PIN screen
-    pinCard:   { width: '100%', maxWidth: '340px', background: C.white, borderRadius: '20px', padding: '28px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', boxShadow: '0 8px 40px rgba(0,0,0,0.1)' },
+    pinCard:   { width: '100%', maxWidth: '340px', background: C.white, borderRadius: '16px', padding: '20px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', boxShadow: '0 8px 40px rgba(0,0,0,0.1)' },
     pinHeader: { width: '100%', display: 'flex', alignItems: 'center' },
     backBtn:   { background: 'none', border: 'none', color: C.muted, fontSize: '13px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", padding: 0 },
     pinAvatar: { width: '64px', height: '64px', borderRadius: '50%', background: C.dark, display: 'flex', alignItems: 'center', justifyContent: 'center' },
@@ -225,7 +225,7 @@
     pinError:  { fontSize: '13px', color: C.red, fontWeight: '600' },
 
     numpad:  { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '100%' },
-    numKey:  { height: '60px', borderRadius: '12px', fontSize: '22px', fontWeight: '600', color: C.dark, cursor: 'pointer', fontFamily: "'Outfit', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' },
+    numKey:  { height: '56px', borderRadius: '10px', fontSize: '20px', fontWeight: '600', color: C.dark, cursor: 'pointer', fontFamily: "'Outfit', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' },
 
     loginBtn: { width: '100%', padding: '14px', borderRadius: '10px', border: 'none', background: C.red, color: '#fff', fontWeight: '700', fontSize: '15px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' },
     };

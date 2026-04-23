@@ -154,7 +154,7 @@ export default function StaffDashboard({
 const s = {
   shell:   { display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg, fontFamily: "'Outfit', system-ui, sans-serif" },
 
-  header:      { background: C.white, borderBottom: `1px solid ${C.border}`, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
+  header:      { background: C.white, borderBottom: `1px solid ${C.border}`, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
   headerLeft:  { display: 'flex', alignItems: 'center', gap: '12px' },
   logoMark:    { width: '36px', height: '36px', background: C.red, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   logoLetter:  { fontSize: '20px', fontWeight: '900', color: '#fff', fontFamily: "'Outfit', sans-serif" },
@@ -166,7 +166,7 @@ const s = {
   staffName:   { fontSize: '13px', fontWeight: '600', color: C.dark },
   logoutBtn:   { width: '32px', height: '32px', border: `1px solid ${C.border}`, background: 'transparent', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.muted },
 
-  content: { flex: 1, padding: '20px', maxWidth: '560px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' },
+  content: { flex: 1, padding: '12px 16px', maxWidth: '560px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '12px', boxSizing: 'border-box' },
 
   todayBar:   { background: C.white, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
   todayLeft:  { display: 'flex', alignItems: 'center', gap: '12px' },
@@ -187,9 +187,9 @@ const s = {
 
   row:     { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 20px', borderBottom: `1px solid ${C.border}` },
   rowMain: { display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, minWidth: 0 },
-  rowTop:  { display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' },
+  rowTop:  { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', minWidth: 0 },
   rowTag:  { fontSize: '11px', fontWeight: '600', color: C.greenText, background: C.greenBg, padding: '2px 7px', borderRadius: '4px', flexShrink: 0 },
-  rowDesc: { fontSize: '13px', color: C.body, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' },
+  rowDesc: { fontSize: '13px', color: C.body, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 },
   rowMeta: { fontSize: '11px', color: C.muted },
   rowAmt:  { fontSize: '15px', fontWeight: '800', color: C.green, letterSpacing: '-0.3px', flexShrink: 0 },
 

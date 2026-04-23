@@ -14,7 +14,7 @@ import { useState, useEffect } from 'react';
 
     const s = {
     form:      { display: 'flex', flexDirection: 'column', gap: '12px' },
-    row2:      { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+    row2:      { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' },
     field:     { display: 'flex', flexDirection: 'column', gap: '5px' },
     label:     { fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
     input:     { padding: '10px 12px', borderRadius: '8px', border: `1.5px solid ${C.border}`, fontSize: '13px', background: C.surface, outline: 'none', color: C.black, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' },

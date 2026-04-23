@@ -43,10 +43,11 @@ export default function Dashboard({
   const [editingPartner, setEditingPartner]             = useState(null);
   const [editingService, setEditingService]             = useState(null);
   const [reportPeriod, setReportPeriod]                 = useState('week');
-  const [settingsTab, setSettingsTab]                   = useState('shop');
+  const [settingsTab, setSettingsTab]                   = useState('shop'); // 'shop' | 'staff'
   const [staffForm, setStaffForm]                       = useState({ displayId: '', name: '', pin: '', role: 'staff' });
   const [resetPinId, setResetPinId]                     = useState(null);
   const [resetPinVal, setResetPinVal]                   = useState('');
+
   const [entryDraft, setEntryDraft]                     = useState(null);
   const [isMobileView, setIsMobileView]               = useState(typeof window !== 'undefined' ? window.innerWidth < 900 : false);
 
@@ -55,8 +56,6 @@ export default function Dashboard({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-
-
 
   const equityTotal       = partners.reduce((s, p) => s + Number(p.equity_pct || 0), 0);
   const showEquityWarning = partners.length > 0 && Math.abs(equityTotal - 100) > 0.01;
@@ -153,7 +152,7 @@ export default function Dashboard({
             ))}
           </div>
 
-          <div style={{ ...s.dashGrid, gridTemplateColumns: isMobileView ? '1fr' : s.dashGrid.gridTemplateColumns }}>
+          <div style={{ ...s.dashGrid, gridTemplateColumns: isMobileView ? '1fr' : 'minmax(0,260px) 1fr' }}>
             <div style={s.dashLeft}>
               <SummaryCard totalIncome={totals.totalIncome} totalExpense={totals.totalExpense} profit={totals.profit} />
               <Panel title="Quick Add Income">
@@ -261,12 +260,12 @@ export default function Dashboard({
             <Panel title="Add Partner">
               <PartnersForm onAddPartner={onAddPartner} submitting={submitting} />
             </Panel>
-            <div style={{ fontSize: '12px', color: equityTotal === 100 ? C.greenText : C.amber, fontWeight: '600', background: equityTotal === 100 ? C.greenBg : C.amberBg, border: `1px solid ${equityTotal === 100 ? C.greenBorder : C.amberBorder}`, borderRadius: '8px', padding: '8px 12px' }}>
-                Equity total: {equityTotal.toFixed(0)}% {equityTotal === 100 ? '✓ Balanced' : `— ${100 - equityTotal}% remaining`}
+            <div style={{ fontSize:'12px', fontWeight:'600', borderRadius:'8px', padding:'8px 12px', marginBottom:'4px',
+                background: equityTotal === 100 ? C.greenBg : C.amberBg,
+                color: equityTotal === 100 ? C.greenText : C.amber,
+                border: `1px solid ${equityTotal === 100 ? C.greenBorder : C.amberBorder}` }}>
+                {equityTotal === 100 ? '✓ Equity balanced at 100%' : `Equity: ${equityTotal.toFixed(0)}% — ${(100-equityTotal).toFixed(0)}% remaining`}
               </div>
-            {showEquityWarning && (
-              <div style={s.warningBanner}>⚠ Equity totals {equityTotal.toFixed(0)}% — should be exactly 100%</div>
-            )}
           </div>
           <div style={s.rightCol}>
             <TableSection title="Partners" count={partners.length} accentColor={C.dark}>
@@ -301,6 +300,7 @@ export default function Dashboard({
       {/* ── SETTINGS ── */}
       {tab === 'settings' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Settings sub-tabs */}
           <div style={s.settingsTabs}>
             {[{ id: 'shop', label: 'Shop & Services' }, { id: 'staff', label: 'Staff & PINs' }].map(t => (
               <button key={t.id} onClick={() => setSettingsTab(t.id)} style={{
@@ -350,7 +350,7 @@ export default function Dashboard({
                       <span style={s.accountValue}>{shop.category}</span>
                     </div>
                   )}
-                  <button onClick={onLogout} style={s.signoutBtn} disabled={submitting}>End session</button>
+                  <button onClick={onLogout} style={s.signoutBtn} disabled={submitting}>Sign out</button>
                 </Panel>
                 <div style={s.dangerPanel}>
                   <div style={s.dangerHeader}><span style={s.dangerTitle}>Danger Zone</span></div>
@@ -369,15 +369,15 @@ export default function Dashboard({
           )}
 
           {settingsTab === 'staff' && (
-            <div style={{ ...s.twoCol, gridTemplateColumns: isMobileView ? '1fr' : s.twoCol.gridTemplateColumns }}>
+            <div style={{ ...s.twoCol, gridTemplateColumns: isMobileView ? '1fr' : 'minmax(0,320px) 1fr' }}>
               <div style={s.leftCol}>
                 <Panel title="Add Staff / Manager">
-                  <p style={{ fontSize: '12px', color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '10px 12px', lineHeight: '1.6', margin: 0 }}>
-                    Give each person a short ID (like 01, 07) and a PIN. They tap their card on the shift screen and enter their PIN — no email needed.
+                  <p style={{ fontSize:'12px', color:C.muted, background:C.bg, border:`1px solid ${C.border}`, borderRadius:'8px', padding:'10px 12px', lineHeight:'1.6', margin:0 }}>
+                    Give each person a short ID (like 01, 07) and a PIN. They tap their card on the shift screen — no email needed.
                   </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }}>
                     <div style={s.editField}>
-                      <label style={s.editLabel}>ID (e.g. 01, 07, 42)</label>
+                      <label style={s.editLabel}>ID (e.g. 01, 07)</label>
                       <input value={staffForm.displayId} onChange={e => setStaffForm(f => ({ ...f, displayId: e.target.value }))}
                         placeholder="07" style={s.editInput} maxLength={6} />
                     </div>
@@ -400,48 +400,46 @@ export default function Dashboard({
                     </div>
                   </div>
                   <button
-                    onClick={() => { onAddStaff(staffForm); setStaffForm({ displayId: '', name: '', pin: '', role: 'staff' }); }}
-                    style={{ ...s.editSaveBtn, width: '100%', padding: '11px' }}
+                    onClick={() => { onAddStaff(staffForm); setStaffForm({ displayId:'', name:'', pin:'', role:'staff' }); }}
+                    style={{ ...s.editSaveBtn, width:'100%', padding:'11px' }}
                     disabled={submitting || !staffForm.displayId || !staffForm.name || !staffForm.pin}
-                  >
-                    {submitting ? 'Adding...' : '+ Add to shift roster'}
-                  </button>
+                  >{submitting ? 'Adding...' : '+ Add to shift roster'}</button>
                 </Panel>
               </div>
               <div style={s.rightCol}>
                 <div style={s.tableSection}>
                   <div style={s.tableSectionHead}>
-                    <div style={{ ...s.tableSectionAccent, background: '#7C3AED' }} />
+                    <div style={{ ...s.tableSectionAccent, background:'#7C3AED' }} />
                     <span style={s.tableSectionTitle}>Shift roster</span>
                     <span style={s.tableCount}>{staffList.filter(m => m.is_active).length}</span>
                   </div>
                   {staffList.filter(m => m.is_active).length === 0 ? (
-                    <EmptyRow text="No staff yet" hint="Add staff using the form on the left." />
+                    <EmptyRow text="No staff yet" hint="Add staff using the form." />
                   ) : staffList.filter(m => m.is_active).map(member => (
                     <div key={member.id} style={s.tableRow}>
                       <div style={s.rowMain}>
                         <div style={s.rowTop}>
-                          <span style={{ fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px',
-                            background: member.role === 'manager' ? '#EFF6FF' : C.greenBg,
-                            color: member.role === 'manager' ? '#1D4ED8' : C.greenText }}>
-                            #{member.display_id} · {member.role === 'manager' ? 'Manager' : 'Staff'}
+                          <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px',
+                            background: member.role==='manager' ? '#EFF6FF' : C.greenBg,
+                            color: member.role==='manager' ? '#1D4ED8' : C.greenText, flexShrink:0 }}>
+                            #{member.display_id} · {member.role==='manager' ? 'Mgr' : 'Staff'}
                           </span>
-                          <span style={{ fontSize: '13px', fontWeight: '700', color: C.dark }}>{member.name}</span>
+                          <span style={{ fontSize:'13px', fontWeight:'700', color:C.dark }}>{member.name}</span>
                         </div>
                         {resetPinId === member.id ? (
-                          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                          <div style={{ display:'flex', gap:'6px', marginTop:'6px', flexWrap:'wrap' }}>
                             <input value={resetPinVal} onChange={e => setResetPinVal(e.target.value)}
-                              placeholder="New PIN" style={{ ...s.editInput, flex: 1, padding: '6px 10px' }} maxLength={6} type="password" />
+                              placeholder="New PIN" style={{ ...s.editInput, flex:1, minWidth:'80px', padding:'6px 10px' }} maxLength={6} type="password" />
                             <button onClick={() => { onResetStaffPin(member.id, resetPinVal); setResetPinId(null); setResetPinVal(''); }}
-                              style={{ ...s.editSaveBtn, padding: '6px 12px', fontSize: '12px' }} disabled={!resetPinVal}>Save</button>
+                              style={{ ...s.editSaveBtn, padding:'6px 12px', fontSize:'12px' }} disabled={!resetPinVal}>Save</button>
                             <button onClick={() => { setResetPinId(null); setResetPinVal(''); }}
-                              style={{ ...s.editCancelBtn, padding: '6px 10px', fontSize: '12px' }}>Cancel</button>
+                              style={{ ...s.editCancelBtn, padding:'6px 10px', fontSize:'12px' }}>✕</button>
                           </div>
                         ) : (
-                          <span style={s.rowMeta}>PIN: {"•".repeat(member.pin?.length || 4)}</span>
+                          <span style={s.rowMeta}>PIN: ••••</span>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
+                      <div style={{ display:'flex', gap:'4px', flexShrink:0 }}>
                         <button onClick={() => { setResetPinId(member.id); setResetPinVal(''); }} style={s.editBtn}>Reset PIN</button>
                         <button onClick={() => onRemoveStaff(member.id)} style={s.deleteBtn} disabled={submitting}>Remove</button>
                       </div>
@@ -824,27 +822,27 @@ function EmptyCard({ icon, text, hint }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = {
-  dashPage:    { display: 'flex', flexDirection: 'column', gap: '20px' },
+  dashPage:    { display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', minWidth: 0 },
   periodStrip: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' },
   dashGrid:    { display: 'grid', gridTemplateColumns: '260px 1fr', gap: '20px', alignItems: 'start' },
   dashLeft:    { display: 'flex', flexDirection: 'column', gap: '12px' },
   dashRight:   { display: 'flex', flexDirection: 'column', gap: '16px' },
-  twoCol:      { display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px', alignItems: 'start' },
+  twoCol:      { display: 'grid', gridTemplateColumns: 'minmax(0,320px) 1fr', gap: '16px', alignItems: 'start' },
   leftCol:     { display: 'flex', flexDirection: 'column', gap: '16px' },
   rightCol:    { display: 'flex', flexDirection: 'column', gap: '16px' },
 
-  filterBar: { display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' },
+  filterBar: { display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap', width: '100%' },
   filterBtn: { padding: '7px 16px', borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontFamily: "'Outfit', sans-serif", transition: 'all 0.12s' },
 
   periodCardBtn:  { background: 'transparent', border: 'none', padding: 0, margin: 0, cursor: 'pointer', textAlign: 'left', width: '100%' },
-  periodCard:     { background: C.white, borderRadius: '12px', padding: '20px', border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'transform 0.12s, box-shadow 0.12s, border-color 0.12s' },
-  periodTop:      { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
-  periodLabel:    { fontSize: '12px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' },
-  periodBadge:    { fontSize: '12px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' },
-  periodIncome:   { fontSize: '26px', fontWeight: '800', color: C.dark, letterSpacing: '-0.5px', marginBottom: '10px' },
-  periodBottom:   { display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: `1px solid ${C.border}` },
-  periodExpLabel: { fontSize: '12px', color: C.muted },
-  periodExpVal:   { fontSize: '12px', fontWeight: '600', color: C.red },
+  periodCard:     { background: C.white, borderRadius: '10px', padding: '14px 12px', border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'transform 0.12s, box-shadow 0.12s, border-color 0.12s' },
+  periodTop:      { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '4px' },
+  periodLabel:    { fontSize: '10px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.4px' },
+  periodBadge:    { fontSize: '11px', fontWeight: '700', padding: '2px 6px', borderRadius: '5px' },
+  periodIncome:   { fontSize: '22px', fontWeight: '800', color: C.dark, letterSpacing: '-0.5px', marginBottom: '8px' },
+  periodBottom:   { display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: `1px solid ${C.border}` },
+  periodExpLabel: { fontSize: '10px', color: C.muted },
+  periodExpVal:   { fontSize: '10px', fontWeight: '600', color: C.red },
 
   panel:      { background: C.white, borderRadius: '12px', border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
   panelTitle: { fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.8px', padding: '14px 20px 0' },
@@ -859,20 +857,20 @@ const s = {
   tableRow:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 20px', borderBottom: `1px solid ${C.border}` },
   rowMain:   { display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, minWidth: 0 },
   rowTop:    { display: 'flex', alignItems: 'center', gap: '8px' },
-  rowTag:    { fontSize: '11px', fontWeight: '600', color: C.greenText, background: C.greenBg, padding: '2px 7px', borderRadius: '4px', flexShrink: 0 },
-  rowCatTag: { fontSize: '11px', fontWeight: '600', color: '#6D28D9', background: '#F5F3FF', padding: '2px 7px', borderRadius: '4px', flexShrink: 0, textTransform: 'capitalize' },
+  rowTag:    { fontSize: '10px', fontWeight: '600', color: C.greenText, background: C.greenBg, padding: '2px 6px', borderRadius: '4px', flexShrink: 0 },
+  rowCatTag: { fontSize: '10px', fontWeight: '600', color: '#6D28D9', background: '#F5F3FF', padding: '2px 6px', borderRadius: '4px', flexShrink: 0, textTransform: 'capitalize' },
   rowDesc:   { fontSize: '13px', color: C.body, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' },
   rowMeta:   { fontSize: '11px', color: C.muted },
-  rowRight:  { display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 },
-  rowAmt:    { fontSize: '14px', fontWeight: '800', letterSpacing: '-0.3px' },
+  rowRight:  { display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 },
+  rowAmt:    { fontSize: '13px', fontWeight: '800', letterSpacing: '-0.2px' },
   rowBtns:   { display: 'flex', gap: '4px' },
   equityChip:{ fontSize: '12px', fontWeight: '700', color: C.mid, background: C.bg, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` },
-  editBtn:   { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.border}`, background: C.white, color: C.mid, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
-  duplicateBtn: { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.greenBorder}`, background: C.greenBg, color: C.greenText, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
-  deleteBtn: { padding: '5px 11px', borderRadius: '6px', border: `1px solid ${C.redMid}`, background: C.redLight, color: C.red, cursor: 'pointer', fontSize: '12px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
+  editBtn:   { padding: '4px 9px', borderRadius: '6px', border: `1px solid ${C.border}`, background: C.white, color: C.mid, cursor: 'pointer', fontSize: '11px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
+  duplicateBtn: { padding: '4px 9px', borderRadius: '6px', border: `1px solid ${C.greenBorder}`, background: C.greenBg, color: C.greenText, cursor: 'pointer', fontSize: '11px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
+  deleteBtn: { padding: '4px 9px', borderRadius: '6px', border: `1px solid ${C.redMid}`, background: C.redLight, color: C.red, cursor: 'pointer', fontSize: '11px', fontWeight: '500', fontFamily: "'Outfit', sans-serif" },
 
   editCard:    { padding: '14px 20px', background: '#FAFAF8', borderBottom: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: '12px' },
-  editGrid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+  editGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' },
   editField:   { display: 'flex', flexDirection: 'column', gap: '4px' },
   editLabel:   { fontSize: '10px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
   editInput:   { padding: '8px 11px', borderRadius: '7px', border: `1px solid ${C.border}`, fontSize: '13px', background: C.white, outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: "'Outfit', sans-serif", color: C.dark },
@@ -907,13 +905,10 @@ const s = {
   deleteAccountLabel: { fontSize: '13px', color: C.mid },
   deleteAccountInput: { padding: '11px 14px', borderRadius: '9px', border: `1.5px solid ${C.border}`, fontSize: '14px', background: C.surface, outline: 'none', color: C.dark, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box', letterSpacing: '2px', fontWeight: '700' },
 
+  settingsTabs: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
+  settingsTab:  { padding: '8px 18px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontFamily: "'Outfit', sans-serif", transition: 'all 0.12s' },
   staffHint:    { fontSize: '13px', color: C.muted, lineHeight: '1.6', background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '10px 12px', margin: '0 0 4px' },
-  staffField:   { display: 'flex', flexDirection: 'column', gap: '5px' },
-  staffLabel:   { fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' },
   staffInput:   { padding: '10px 12px', borderRadius: '8px', border: `1.5px solid ${C.border}`, fontSize: '13px', background: C.surface, outline: 'none', color: C.dark, fontFamily: "'Outfit', sans-serif", width: '100%', boxSizing: 'border-box' },
-  staffInviteBtn: { padding: '11px', borderRadius: '8px', border: 'none', background: C.dark, color: C.white, fontWeight: '700', fontSize: '14px', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' },
-  staffRoleBadge: { fontSize: '11px', fontWeight: '600', color: '#5B21B6', background: '#EDE9FE', padding: '2px 7px', borderRadius: '4px', flexShrink: 0 },
-  settingsTabs: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '4px' },
   toast: { position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: "'Outfit', sans-serif", zIndex: 9999, whiteSpace: 'nowrap', boxShadow: '0 8px 32px rgba(0,0,0,0.24)' },
 
   overlay:        { position: 'fixed', inset: 0, background: 'rgba(10,10,10,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
